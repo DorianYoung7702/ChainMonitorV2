@@ -1,0 +1,90 @@
+import sqlite3
+from pathlib import Path
+from typing import List, Dict, Any
+
+DB_PATH = Path(__file__).resolve().parent / "defi_monitor.db"
+
+
+class MonitorDatabase:
+    def __init__(self, db_path: Path | str = DB_PATH):
+        self.db_path = str(db_path)
+        self.conn = sqlite3.connect(self.db_path)
+        self.create_tables()
+
+    def create_tables(self):
+        c = self.conn.cursor()
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER,
+                block_number INTEGER,
+                tx_hash TEXT UNIQUE,
+                token_in TEXT,
+                token_out TEXT,
+                amount_in INTEGER,
+                amount_out INTEGER,
+                gas_used INTEGER,
+                gas_price INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS risk_levels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_id TEXT,
+                level INTEGER,
+                source TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        self.conn.commit()
+
+    def save_trades(self, trades: list[dict]):
+        if not trades:
+            return
+
+        with self.conn:
+            c = self.conn.cursor()
+            c.executemany(
+                """
+                INSERT OR IGNORE INTO trades(
+                    tx_hash,
+                    timestamp,
+                    block_number,
+                    token_in,
+                    token_out,
+                    amount_in,
+                    amount_out,
+                    gas_used,
+                    gas_price
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        t["tx_hash"],
+                        int(t["timestamp"]),  # 时间戳正常用 int
+                        int(t["block_number"]),  # 区块号也正常用 int
+                        t["token_in"],
+                        t["token_out"],
+                        str(t["amount_in"]),  # 关键：大整数转成字符串
+                        str(t["amount_out"]),
+                        str(t.get("gas_used", 0)),  # 同样转成字符串，防止极端情况
+                        str(t.get("gas_price", 0)),
+                    )
+                    for t in trades
+                ],
+            )
+    def save_risk_level(self, market_id: str, level: int, source: str = "local"):
+        c = self.conn.cursor()
+        c.execute(
+            """
+            INSERT INTO risk_levels (market_id, level, source)
+            VALUES (?, ?, ?)
+            """,
+            (market_id, level, source),
+        )
+        self.conn.commit()

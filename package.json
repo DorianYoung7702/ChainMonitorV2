@@ -1,0 +1,15 @@
+{
+  "name": "defi-market-monitor",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile",
+    "deploy:sepolia": "npx hardhat run scripts/deployRiskMonitor.js --network sepolia"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "dotenv": "^16.0.0",
+    "hardhat": "^2.22.0"
+  }
+}
