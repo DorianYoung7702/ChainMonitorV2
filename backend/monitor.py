@@ -4,16 +4,24 @@ import os
 import time
 import json
 from typing import Dict, Any, List, Optional
+from pathlib import Path
 
 from dotenv import load_dotenv
 from web3 import Web3
 
 from config import load_risk_monitor_contract
-from db import MonitorDatabase
 from chain_data import fetch_recent_swaps
-from whale_cex import fetch_whale_metrics, fetch_cex_net_inflow, estimate_pool_liquidity
+from whale_cex import (
+    fetch_whale_metrics,
+    fetch_cex_net_inflow,
+    estimate_pool_liquidity,
+)
+from db import MonitorDatabase, DB_PATH
 
 load_dotenv()
+
+# 全局复用一个数据库连接，指向 backend/defi_monitor.db
+db = MonitorDatabase(DB_PATH)
 
 # ----------------------------------------------------------------------
 # 1. 监控 & 风险配置（可按需要微调）
@@ -91,7 +99,9 @@ def get_default_dex_market(markets: List[Dict[str, Any]]) -> Dict[str, Any]:
     for m in markets:
         if m.get("type") == "dex_pool":
             return m
-    raise RuntimeError("markets.json 中没有 type == 'dex_pool' 的市场配置，请先配置一个 DEX 池子。")
+    raise RuntimeError(
+        "markets.json 中没有 type == 'dex_pool' 的市场配置，请先配置一个 DEX 池子。"
+    )
 
 
 def calc_market_id(label: str) -> bytes:
@@ -161,7 +171,9 @@ def score_dex_activity(dex_volume: int, dex_trades: int, pool_liquidity: int) ->
     return int(dex_score)
 
 
-def score_whale_pressure(whale_sell_total: int, whale_count_selling: int, pool_liquidity: int) -> int:
+def score_whale_pressure(
+    whale_sell_total: int, whale_count_selling: int, pool_liquidity: int
+) -> int:
     cfg = RISK_CONFIG["whale"]
 
     if pool_liquidity <= 0:
@@ -227,7 +239,9 @@ def compute_risk_level(metrics: Dict[str, Any]) -> int:
     pool_liquidity = metrics["pool_liquidity"] or 1  # 避免除以 0
 
     dex_score = score_dex_activity(dex_volume, dex_trades, pool_liquidity)
-    whale_score = score_whale_pressure(whale_sell_total, whale_count_selling, pool_liquidity)
+    whale_score = score_whale_pressure(
+        whale_sell_total, whale_count_selling, pool_liquidity
+    )
     cex_score = score_cex_inflow(cex_net_inflow, pool_liquidity)
 
     score = dex_score + whale_score + cex_score
@@ -263,7 +277,7 @@ def monitor_loop(
     if blocks_back is None:
         blocks_back = RISK_CONFIG["blocks_back"]
 
-    db = MonitorDatabase()
+    # 这里不再重新创建 db，直接用全局的 db 实例
     w3, contract = load_risk_monitor_contract(network)
 
     markets = load_markets()
@@ -272,6 +286,7 @@ def monitor_loop(
     pair_address: str = dex_market.get("pairAddress") or dex_market.get("address")
     label: str = dex_market["label"]
     market_id: bytes = calc_market_id(label)
+    market_id_hex = market_id.hex()
 
     # ===== 从 markets.json 中整理巨鲸地址 & 交易所地址列表 =====
     whales: List[str] = []
@@ -299,7 +314,7 @@ def monitor_loop(
     print("🚀 启动监控：")
     print(f"  监控市场 label      : {label}")
     print(f"  DEX 池子地址        : {pair_address}")
-    print(f"  marketId(bytes32)   : {market_id.hex()}")
+    print(f"  marketId(bytes32)   : {market_id_hex}")
     print(f"  巨鲸地址数          : {len(whales)}")
     print(f"  交易所热钱包地址数  : {len(cex_addresses)}")
 
@@ -326,7 +341,9 @@ def monitor_loop(
             dex_trades = len(trades)
 
             # 2) 池子流动性估计（主网）
-            pool_liquidity = estimate_pool_liquidity(pair_address, network="mainnet")
+            pool_liquidity = estimate_pool_liquidity(
+                pair_address, network="mainnet"
+            )
 
             # 3) 巨鲸行为（基于 ETH 转账 + 池子）
             try:
@@ -383,12 +400,16 @@ def monitor_loop(
             level = compute_risk_level(metrics)
             print(f"当前计算风险等级: {level}")
 
-            # 存到本地数据库
-            db.save_risk_level(
-                market_id=market_id.hex(),
-                level=level,
-                source="multi_factor",  # 标记来源
-            )
+            # ===== 把本轮风险等级写入本地 SQLite，用于前端展示 =====
+            try:
+                db.save_risk_level(
+                    market_id=market_id_hex,
+                    level=int(level),
+                    source="multi_factor",
+                )
+                print("💾 已写入本地数据库 defi_monitor.db")
+            except Exception as e:
+                print(f"❌ 写入本地数据库失败: {e}")
 
             # ===== 防抖逻辑：判断是否需要上链 =====
             if last_level is None:
@@ -424,7 +445,9 @@ def monitor_loop(
 
             if should_update:
                 print(f"⚠️ 符合上链条件（{reason}），调用合约更新...")
-                tx_hash = send_update_risk_tx(w3, contract, level, market_id=market_id)
+                tx_hash = send_update_risk_tx(
+                    w3, contract, level, market_id=market_id
+                )
                 print(f"✅ 已提交交易，tx = {tx_hash}")
                 onchain_level = level
                 last_update_ts = now_ts

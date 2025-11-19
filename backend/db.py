@@ -11,7 +11,7 @@ DB_PATH = Path(__file__).resolve().parent / "defi_monitor.db"
 class MonitorDatabase:
     def __init__(self, db_path: Path | str = DB_PATH):
         self.db_path = str(db_path)
-        # allow multi-thread use if将来需要，可以加 check_same_thread=False
+        # 如果后面你想在多线程里也用同一个连接，可以加 check_same_thread=False
         self.conn = sqlite3.connect(self.db_path)
         self.create_tables()
 
