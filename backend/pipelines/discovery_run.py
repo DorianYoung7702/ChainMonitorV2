@@ -52,8 +52,19 @@ try:
 except Exception:
     build_cross_chain_comparison = None
 
+# ----------------------------
+# ✅ 可选：V3 executable arbitrage（如果文件存在就用）
+# ----------------------------
+try:
+    from backend.analysis.arbitrage_v3_exec import run_v3_arbitrage
+except Exception:
+    run_v3_arbitrage = None
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+
+# ✅ 默认关闭 tick 扫描（这是卡死源头之一）；需要时 export ENABLE_V3_LIQ_DIST=1
+ENABLE_V3_LIQ_DIST = (os.getenv("ENABLE_V3_LIQ_DIST") or "0").strip().lower() in ("1", "true", "yes")
+V3_LIQ_DIST_TICKS_EACH_SIDE = int((os.getenv("V3_LIQ_DIST_TICKS_EACH_SIDE") or "64").strip())
 
 
 def _wei_to_eth(x: Any) -> float:
@@ -155,6 +166,7 @@ def save_report_to_md(report: Dict[str, Any], output_dir: Path = OUTPUT_DIR) -> 
 
     v3_block = report.get("v3", {}) or {}
     cross_chain = report.get("cross_chain_comparison", {}) or {}
+    v3_exec = report.get("v3_executable_arbitrage", {}) or {}
 
     with open(report_file, "w", encoding="utf-8") as f:
         f.write("# Data Discovery Report\n\n")
@@ -218,6 +230,24 @@ def save_report_to_md(report: Dict[str, Any], output_dir: Path = OUTPUT_DIR) -> 
                 f.write(json.dumps(v2v3, indent=2, default=str))
                 f.write("\n```\n")
             f.write("\n")
+
+        # ✅ 新增：V3↔V3 可执行套利（FAST 筛选）
+        f.write("## V3 Executable Arbitrage (V3↔V3)\n")
+        if not v3_exec:
+            f.write("- Not available (arbitrage_v3_exec.py not enabled or no V3 pools).\n\n")
+        else:
+            opps = v3_exec.get("opportunities") or []
+            f.write(f"- Opportunities: **{len(opps)}**\n")
+            best = v3_exec.get("best") or {}
+            if best:
+                f.write(
+                    f"- Best: buy={best.get('best_buy_pool')} sell={best.get('best_sell_pool')} "
+                    f"net_spread_bps={best.get('net_spread_bps')} "
+                    f"gas_token0={best.get('gas_cost_token0_human')}\n"
+                )
+            f.write("\n```json\n")
+            f.write(json.dumps(v3_exec, indent=2, default=str))
+            f.write("\n```\n\n")
 
         # ✅ Cross-chain 报告块
         f.write("## Cross-chain Comparison\n")
@@ -305,6 +335,8 @@ def run_discovery(chain: str, hours: int, output_dir: Path = OUTPUT_DIR):
             fee = int(m.get("fee") or 0)
             try:
                 st = fetch_v3_pool_state(pool_addr, chain=chain)
+                if not st:
+                    raise RuntimeError("fetch_v3_pool_state returned empty dict")
 
                 price_t1_per_t0 = None
                 if v3_price_from_sqrtPriceX96 and st.get("sqrtPriceX96") is not None:
@@ -314,6 +346,7 @@ def run_discovery(chain: str, hours: int, output_dir: Path = OUTPUT_DIR):
                         int(st.get("decimals1", 18)),
                     )
 
+                # ✅ 关键：把 decimals/symbol 一并写进 row，套利模块要用
                 row = {
                     "pool": pool_addr,
                     "fee": fee or st.get("fee"),
@@ -322,15 +355,19 @@ def run_discovery(chain: str, hours: int, output_dir: Path = OUTPUT_DIR):
                     "liquidity": st.get("liquidity"),
                     "token0": st.get("token0"),
                     "token1": st.get("token1"),
+                    "symbol0": st.get("symbol0"),
+                    "symbol1": st.get("symbol1"),
+                    "decimals0": st.get("decimals0"),
+                    "decimals1": st.get("decimals1"),
                     "price_token1_per_token0": price_t1_per_t0,
                 }
 
-                # 可选：tick 流动性分布（摘要）
-                if fetch_v3_liquidity_distribution:
+                # ✅ 默认不做 tick 扫描（避免卡死）；需要时用环境变量打开
+                if ENABLE_V3_LIQ_DIST and fetch_v3_liquidity_distribution:
                     dist = fetch_v3_liquidity_distribution(
                         pool_addr,
                         chain=chain,
-                        num_ticks_each_side=200,
+                        num_ticks_each_side=V3_LIQ_DIST_TICKS_EACH_SIDE,
                     )
                     if isinstance(dist, dict):
                         row["liquidity_distribution_summary"] = dist.get("summary") or {}
@@ -360,6 +397,17 @@ def run_discovery(chain: str, hours: int, output_dir: Path = OUTPUT_DIR):
             except Exception as e:
                 warnings.append(f"detect_v2_v3_spread failed: {str(e)[:160]}")
 
+    # ✅ 5.5) V3↔V3 executable arbitrage（FAST，不扫 ticks，不会卡死）
+    v3_exec_arb: Dict[str, Any] = {}
+    if run_v3_arbitrage is not None and v3_report.get("pools"):
+        try:
+            v3_exec_arb = run_v3_arbitrage(
+                v3_pools=v3_report["pools"],
+                chain=chain,
+            ) or {}
+        except Exception as e:
+            warnings.append(f"run_v3_arbitrage failed: {str(e)[:160]}")
+
     # ✅ 6) Cross-chain：如果实现了 cross_chain_data.py，就生成跨链对比
     cross_chain_report: Dict[str, Any] = {}
     if build_cross_chain_comparison is not None:
@@ -372,9 +420,6 @@ def run_discovery(chain: str, hours: int, output_dir: Path = OUTPUT_DIR):
             ) or {}
         except Exception as e:
             warnings.append(f"cross_chain_comparison failed: {str(e)[:160]}")
-    else:
-        # 不强制报错，但提示你 bonus 缺口
-        pass
 
     report_data: Dict[str, Any] = {
         "chain": chain,
@@ -390,8 +435,8 @@ def run_discovery(chain: str, hours: int, output_dir: Path = OUTPUT_DIR):
         "arbitrage_opportunities": arbs,
         "warnings": warnings,
         "dexscreener": dexscreener_snapshot,
-        # ✅ 新增
         "v3": v3_report,
+        "v3_executable_arbitrage": v3_exec_arb,  # ✅ 新增
         "cross_chain_comparison": cross_chain_report,
     }
 

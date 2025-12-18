@@ -183,29 +183,50 @@ def _pick_best_pair(pairs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 
 def find_pair_on_chain_via_dexscreener(
-    ds: DexScreener,
-    chain_id: str,
-    token_a_addr: str,
-    token_b_addr: str,
+        ds: DexScreener,
+        chain_id: str,
+        token_a_addr: str,
+        token_b_addr: str,
 ) -> Optional[Dict[str, Any]]:
     cid = _norm_chain(chain_id)
 
-    resp = ds.token_pairs(token_a_addr) or {}
-    pairs = resp.get("pairs") or []
-    if not isinstance(pairs, list):
-        return None
+    # 定义一个内部函数来执行查询和过滤
+    def _fetch_candidates(lookup_addr: str) -> List[Dict[str, Any]]:
+        # 增加容错：如果API调用失败返回None，处理为空列表
+        try:
+            resp = ds.token_pairs(lookup_addr) or {}
+        except Exception:
+            return []
 
-    candidates: List[Dict[str, Any]] = []
-    for p in pairs:
-        if not isinstance(p, dict):
-            continue
-        if _norm_chain(str(p.get("chainId") or "")) != cid:
-            continue
-        if _pair_has_tokens(p, token_a_addr, token_b_addr):
-            candidates.append(p)
+        pairs = resp.get("pairs") or []
+        if not isinstance(pairs, list):
+            return []
 
-    return _pick_best_pair(candidates)
+        valid_pairs = []
+        for p in pairs:
+            if not isinstance(p, dict):
+                continue
+            # 确保链匹配 (DexScreener 返回的 chainId 通常是全小写的 slug)
+            if _norm_chain(str(p.get("chainId") or "")) != cid:
+                continue
+            # 检查是否包含我们需要的两个代币
+            if _pair_has_tokens(p, token_a_addr, token_b_addr):
+                valid_pairs.append(p)
+        return valid_pairs
 
+    # 1. 尝试通过 Token A (如 USDC) 查询
+    candidates = _fetch_candidates(token_a_addr)
+
+    # 2. 如果 Token A 没查到 (可能因为 USDC 交易对太多，目标对子被 API 截断了)
+    #    尝试通过 Token B (如 WETH) 反向查询
+    if not candidates:
+        candidates = _fetch_candidates(token_b_addr)
+
+    # 3. 如果两次查询汇总后有结果，取流动性最好的
+    if candidates:
+        return _pick_best_pair(candidates)
+
+    return None
 
 # ============================================================
 # 3) 跨链对比与套利粗筛

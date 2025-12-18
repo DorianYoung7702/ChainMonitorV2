@@ -1,6 +1,8 @@
 # backend/collectors/v3_data.py
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -193,12 +195,21 @@ def fetch_ticks_around_current(
     *,
     words_each_side: int = 8,
     max_ticks: int = 800,
+    # ✅ 防卡死保险丝
+    max_rpc_calls: int = 600,
+    max_seconds: int = 12,
     w3: Optional[Web3] = None,
 ) -> Dict[str, Any]:
+    """
+    扫描 tickBitmap 在 current tick 周围若干 word，抓已初始化 ticks。
+    ✅ 关键：加 max_seconds + max_rpc_calls，避免无限卡死。
+    """
     w3 = w3 or make_web3(network)
+    t0 = time.time()
+
     snap = get_v3_pool_snapshot(pool_address, network=network, w3=w3)
     if not snap:
-        return {"pool_address": pool_address, "network": network, "ticks": [], "snapshot": None}
+        return {"pool_address": pool_address, "network": network, "ticks": [], "snapshot": None, "meta": {}}
 
     pool = w3.eth.contract(address=_to_checksum(pool_address), abi=UNISWAP_V3_POOL_ABI)
 
@@ -207,10 +218,16 @@ def fetch_ticks_around_current(
 
     ticks_out: List[Dict[str, Any]] = []
     fetched = 0
+    rpc_calls = 0
+    truncated = False
 
     for wp in word_positions:
         if fetched >= max_ticks:
             break
+        if (time.time() - t0) > max_seconds:
+            truncated = True
+            break
+
         try:
             bitmap = int(pool.functions.tickBitmap(int(wp)).call())
         except Exception:
@@ -222,19 +239,26 @@ def fetch_ticks_around_current(
         for b in bits:
             if fetched >= max_ticks:
                 break
+            if rpc_calls >= max_rpc_calls:
+                truncated = True
+                break
+            if (time.time() - t0) > max_seconds:
+                truncated = True
+                break
+
             t = _tick_for_word_bit(int(wp), int(b), snap.tick_spacing)
+
             try:
+                rpc_calls += 1
                 info = pool.functions.ticks(int(t)).call()
                 initialized = bool(info[7])
                 if not initialized:
                     continue
-                lg = int(info[0])
-                ln = int(info[1])
                 ticks_out.append(
                     {
                         "tick": int(t),
-                        "liquidityGross": lg,
-                        "liquidityNet": ln,
+                        "liquidityGross": int(info[0]),
+                        "liquidityNet": int(info[1]),
                         "wordPos": int(wp),
                         "bitPos": int(b),
                     }
@@ -243,7 +267,12 @@ def fetch_ticks_around_current(
             except Exception:
                 continue
 
+        if truncated:
+            break
+
     ticks_out.sort(key=lambda x: x["tick"])
+    elapsed = time.time() - t0
+
     return {
         "pool_address": snap.pool_address,
         "network": snap.network,
@@ -262,6 +291,17 @@ def fetch_ticks_around_current(
             "unlocked": snap.unlocked,
         },
         "ticks": ticks_out,
+        "meta": {
+            "rpc_calls": rpc_calls,
+            "elapsed_seconds": round(elapsed, 3),
+            "truncated": bool(truncated),
+            "limits": {
+                "max_ticks": int(max_ticks),
+                "max_rpc_calls": int(max_rpc_calls),
+                "max_seconds": int(max_seconds),
+                "words_each_side": int(words_each_side),
+            },
+        },
     }
 
 
@@ -274,7 +314,7 @@ def fetch_v3_pool_state(pool_address: str, chain: str = "mainnet") -> Dict[str, 
     discovery_run.py 会调用它，并期待 dict 字段：
       sqrtPriceX96, tick, liquidity, fee, token0, token1, decimals0, decimals1
     """
-    w3 = make_web3(chain)
+    w3 = make_web3(chain)  # ✅ 现在有缓存，不会重复建
     snap = get_v3_pool_snapshot(pool_address, network=chain, w3=w3)
     if not snap:
         return {}
@@ -305,12 +345,14 @@ def fetch_v3_liquidity_distribution(
 ) -> Dict[str, Any]:
     """
     返回一个不会把报告撑爆的结构：
-    - ticks: 仅少量（默认不直接塞全部到 report）
     - summary: 面试/报告友好的摘要
+    - ticks: 保留（调试用），pipeline 里通常只取 summary
     """
+    # ✅ 让这些参数也可通过 env 调优（不改代码就能“快/慢”切换）
+    max_seconds = int((os.getenv("V3_TICK_SCAN_MAX_SECONDS") or "12").strip())
+    max_rpc_calls = int((os.getenv("V3_TICK_SCAN_MAX_RPC_CALLS") or "600").strip())
+
     # 将 “ticks_each_side” 粗略映射到 “words_each_side”
-    # 每个 word 256 个 “compressed ticks”（约等于 256 * tickSpacing）
-    # 这里做一个保守换算：num_ticks_each_side / 256 -> words_each_side
     words_each_side = max(1, int(num_ticks_each_side // 256) + 1)
 
     raw = fetch_ticks_around_current(
@@ -318,14 +360,17 @@ def fetch_v3_liquidity_distribution(
         network=chain,
         words_each_side=words_each_side,
         max_ticks=min(2000, max(400, num_ticks_each_side * 4)),
+        max_seconds=max_seconds,
+        max_rpc_calls=max_rpc_calls,
     )
 
     snap = raw.get("snapshot") or {}
     ticks = raw.get("ticks") or []
-    if not snap or not isinstance(ticks, list):
-        return {"pool": pool_address, "chain": chain, "ticks": [], "summary": {}}
+    meta = raw.get("meta") or {}
 
-    # --- summary: 最近的上下边界 tick / 缺口等
+    if not snap or not isinstance(ticks, list):
+        return {"pool": pool_address, "chain": chain, "ticks": [], "summary": {}, "meta": meta}
+
     cur_tick = int(snap.get("tick") or 0)
     initialized = sorted([int(t.get("tick")) for t in ticks if isinstance(t, dict) and t.get("tick") is not None])
 
@@ -341,7 +386,6 @@ def fetch_v3_liquidity_distribution(
     if lower is not None and upper is not None:
         gap = int(upper - lower)
 
-    # 用一个“可解释”的缺口判定：gap > tickSpacing * 200 视为明显缺口（你可按经验调整）
     tick_spacing = int(snap.get("tick_spacing") or snap.get("tickSpacing") or 1)
     gap_is_large = bool(gap is not None and tick_spacing > 0 and gap > tick_spacing * 200)
 
@@ -353,13 +397,17 @@ def fetch_v3_liquidity_distribution(
         "nearest_initialized_tick_above": upper,
         "gap_ticks_between_nearest_bounds": gap,
         "gap_is_large": gap_is_large,
-        "note": "This is a bounded online scan around current tick (tickBitmap window).",
+        "note": "Bounded online scan around current tick (tickBitmap window).",
+        "scan_truncated": bool(meta.get("truncated", False)),
+        "rpc_calls": meta.get("rpc_calls"),
+        "elapsed_seconds": meta.get("elapsed_seconds"),
     }
 
     return {
         "pool": raw.get("pool_address"),
         "chain": raw.get("network"),
         "summary": summary,
-        # ticks 不要全塞进 report，pipeline 里只用 summary；这里保留以便你需要时调试
+        "meta": meta,
+        # ticks 不建议塞进 report（太大），但保留便于你本地调试
         "ticks": ticks,
     }

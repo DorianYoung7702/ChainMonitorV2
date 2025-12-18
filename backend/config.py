@@ -11,11 +11,14 @@ from web3 import Web3
 try:
     from web3.middleware import ExtraDataToPOAMiddleware as _POA_MIDDLEWARE  # v7+
 except ImportError:
-    from web3.middleware import geth_poa_middleware as _POA_MIDDLEWARE       # v6-
+    from web3.middleware import geth_poa_middleware as _POA_MIDDLEWARE  # v6-
 
 load_dotenv()
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+
+# ✅ Web3 实例缓存：避免 pipeline 内重复建 HTTP session（更快、更不容易卡）
+_W3_CACHE: dict[str, Web3] = {}
 
 
 def _norm_network(network: str) -> str:
@@ -57,8 +60,12 @@ def _is_poa_chain(network: str) -> bool:
 
 def make_web3(network: str = "mainnet") -> Web3:
     net = _norm_network(network)
-    env_key = _rpc_env_key(net)
 
+    # ✅ cache hit
+    if net in _W3_CACHE:
+        return _W3_CACHE[net]
+
+    env_key = _rpc_env_key(net)
     if not env_key:
         raise ValueError(f"未知网络: {network}（norm={net}），请在 config.py 里补充 RPC 映射")
 
@@ -66,7 +73,10 @@ def make_web3(network: str = "mainnet") -> Web3:
     if not rpc:
         raise RuntimeError(f"{net} 的 RPC 未在 .env 中配置（缺少 {env_key}）")
 
-    w3 = Web3(Web3.HTTPProvider(rpc))
+    # ✅ 防卡死：HTTP 超时（秒）。建议 15~30
+    timeout = int((os.getenv("RPC_TIMEOUT") or "20").strip())
+
+    w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": timeout}))
 
     # ✅ 正确注入 POA middleware
     if _is_poa_chain(net):
@@ -78,6 +88,9 @@ def make_web3(network: str = "mainnet") -> Web3:
 
     # 这里打印很好，用于你面试演示；如果嫌吵可改成受 env 控制
     print(f"✅ 已连接 {net}, 最新区块: {w3.eth.block_number}")
+
+    # ✅ cache store
+    _W3_CACHE[net] = w3
     return w3
 
 
