@@ -93,104 +93,139 @@ Using the current data, a lightweight risk score can be built from:
 
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui",
+    "primaryColor": "#E8F1FF",
+    "primaryTextColor": "#0B1220",
+    "primaryBorderColor": "#3B82F6",
+    "lineColor": "#64748B",
+    "tertiaryColor": "#F8FAFC"
+  }
+}}%%
+
 flowchart TD
     A[Data Sources] --> B[Configuration]
     A --> C[Collectors]
-    
+
     subgraph A [Data Sources]
         A1[Ethereum RPC]
         A2[BSC RPC]
         A3[Arbitrum RPC]
         A4[DexScreener API]
     end
-    
+
     subgraph B [Configuration]
         B1[markets.json<br/>Market Config]
         B2[Environment Variables<br/>.env]
         B3[config.py<br/>RPC Setup]
     end
-    
+
     subgraph C [Collectors]
         C1[chain_data.py<br/>V2 On-chain Data]
         C2[v3_data.py<br/>V3 Pool State]
         C3[cross_chain_data.py<br/>Cross-chain Data]
         C4[whale_cex.py<br/>Whale Monitoring]
     end
-    
+
     C --> D[Processing]
-    
+
     subgraph D [Processing]
         D1[evaluate_signal.py<br/>Price Series & Stats]
         D2[v3_analysis.py<br/>V3 Liquidity Analysis]
         D3[arbitrage_v3_exec.py<br/>Arbitrage Detection]
     end
-    
+
     D --> E[Core Pipeline]
-    
+
     subgraph E [Core Pipeline]
         E1[discovery_run.py<br/>Main Runner]
         E2[Time Window Management]
         E3[Concurrency Control]
         E4[Error Handling]
     end
-    
+
     E --> F[Storage]
-    
+
     subgraph F [Storage]
         F1[MonitorDatabase<br/>SQLite]
         F2[In-memory Cache]
         F3[Output Files<br/>JSON/Markdown]
     end
-    
+
     F --> G[Reporting]
-    
+
     subgraph G [Reporting]
         G1[Markdown Report]
         G2[Structured JSON]
         G3[Console Output]
     end
-    
+
     H[Utilities] --> C
     H --> D
     H --> E
-    
+
     subgraph H [Utilities]
         H1[web3.py<br/>Blockchain Interaction]
         H2[pandas/numpy<br/>Data Analysis]
         H3[TA-Lib<br/>Technical Indicators]
         H4[Concurrency<br/>asyncio]
     end
-    
+
     I[Monitoring & Control] --> E
-    
+
     subgraph I [Monitoring & Control]
         I1[Progress Tracking]
         I2[Performance Metrics]
         I3[Logging]
         I4[Alerting]
     end
-    
+
     %% Key data flows
     C1 -- Swap Events / Pool State --> D1
     C2 -- V3 Liquidity / Price --> D2
     C3 -- Cross-chain Prices --> D3
     C4 -- Whale Activity --> D1
-    
+
     D1 -- Price Series --> E1
     D2 -- V3 Analysis Output --> E1
     D3 -- Arbitrage Opportunities --> E1
-    
+
     E1 -- Aggregated Results --> F
     F -- Persisted Outputs --> G
-    
+
     %% Configuration flows
     B1 -- Market List --> E1
     B2 -- Runtime Params --> C & D & E
     B3 -- RPC Endpoints --> C & C4
-    
+
     %% Control flows
     I1 -. Progress Feedback .-> E1
     I3 -. Log Records .-> C & D & E
+
+    %% ---------- Styling ----------
+    classDef sources fill:#E0F2FE,stroke:#0284C7,color:#0B1220,stroke-width:1px;
+    classDef config  fill:#FEE2E2,stroke:#EF4444,color:#0B1220,stroke-width:1px;
+    classDef collect fill:#ECFDF5,stroke:#10B981,color:#0B1220,stroke-width:1px;
+    classDef proc    fill:#FEF9C3,stroke:#EAB308,color:#0B1220,stroke-width:1px;
+    classDef pipe    fill:#EDE9FE,stroke:#8B5CF6,color:#0B1220,stroke-width:1px;
+    classDef store   fill:#FFEDD5,stroke:#F97316,color:#0B1220,stroke-width:1px;
+    classDef report  fill:#FDF2F8,stroke:#EC4899,color:#0B1220,stroke-width:1px;
+    classDef util    fill:#F1F5F9,stroke:#64748B,color:#0B1220,stroke-width:1px;
+    classDef monitor fill:#DCFCE7,stroke:#22C55E,color:#0B1220,stroke-width:1px;
+
+    class A,A1,A2,A3,A4 sources;
+    class B,B1,B2,B3 config;
+    class C,C1,C2,C3,C4 collect;
+    class D,D1,D2,D3 proc;
+    class E,E1,E2,E3,E4 pipe;
+    class F,F1,F2,F3 store;
+    class G,G1,G2,G3 report;
+    class H,H1,H2,H3,H4 util;
+    class I,I1,I2,I3,I4 monitor;
+
+    linkStyle default stroke:#64748B,stroke-width:1.2px;
 ```
 ---
 
