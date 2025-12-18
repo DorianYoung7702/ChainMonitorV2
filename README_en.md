@@ -1,336 +1,363 @@
-# DeFi Risk Sentinel · On-chain Multi-factor Market Risk Monitor
-
-> An end-to-end **DeFi risk “traffic light” system** powered by real Ethereum mainnet data: Python monitor, Solidity risk contract, and a web-based dashboard.
+# DeFi Market Monitor V2
 
 ---
 
-## 1. Overview
+## 1. Data Source Selection
 
-- **Market under watch**: Ethereum mainnet Uniswap V2 USDC/WETH pool  
-- **What it does**:
-  - Periodically pulls swaps and liquidity from on-chain data
-  - Tracks whale selling and CEX hot-wallet net inflows
-  - Combines static rules and dynamic percentile scoring into a 0–3 risk level
-  - Writes the risk level on-chain via a `RiskMonitor` smart contract
-  - Visualises the whole time series and current “signal light” in a dashboard
+This project uses **Ethereum Mainnet (extensible to EVM chains such as BSC)** as the primary research target, focusing on **DEX trading flow and liquidity state**, covering:
 
-The project demonstrates a complete pipeline:  
-**On-chain data → Python analytics → SQLite storage → on-chain risk level → frontend visualisation**.
+- **Uniswap/Sushi V2: Swap events (trade flow)**  
+  Used to build short-window price series, compute realized volatility/drawdown, and evaluate cross-pool spreads and executable arbitrage.
+
+- **Uniswap V3: Pool state (slot0/liquidity) + local tick distribution (tickBitmap window)**  
+  Used to understand how **concentrated liquidity** drives price sensitivity (slippage/depth) and structural differences across fee tiers (500/3000/10000). This aligns with the assessment’s encouraged direction of “advanced mechanics (e.g., Uniswap v3 concentrated liquidity)”.
+
+- **Cross-chain comparison (Ethereum vs BSC)**  
+  For the same “economically equivalent trading pair” (e.g., USDC-ETH/WETH), the project compares **USD price, liquidity, volume, and txns** across chains, then estimates the cross-chain net spread. This corresponds to the bonus requirement “Cross-chain comparisons”.
+
+- **Risk-side signals**  
+  CEX net inflow and whale sell pressure (used to help interpret short-window price/risk behavior).
+
+Why this is valuable:  
+**DEX trades and arbitrage/MEV signals** are on-chain, auditable, and highly real-time. They support both **arbitrage opportunity discovery** and **risk analysis** (volatility, drawdown, liquidity changes, and cross-chain migration costs).
 
 ---
 
-## 2. System Architecture
+## 2. What the Project Does (Outputs & Report Structure)
 
-```text
-Ethereum mainnet + Sepolia
-        │
-        ▼
-Python monitor (backend/monitor.py)
-  - fetch_recent_swaps
-  - estimate_pool_liquidity
-  - fetch_whale_metrics
-  - fetch_cex_net_inflow
-  - compute_risk_level_static / dynamic
-  - send_update_risk_tx (updateRisk)
-        │
-        ▼
-SQLite (defi_monitor.db)
-  - risk_levels
-  - risk_metrics
-        │
-        ├── Flask API (backend/api_server.py)
-        │     - /api/status
-        │     - /api/risk
-        │     - /api/onchain_risk
-        │
-        ▼
-RiskMonitor.sol (Sepolia)
-  - markets[marketId].level
-  - keeper = Python monitor script
-        ▼
-frontend_simple/index.html
-  - risk level time series
-  - current traffic light & hints
+After running, the system generates a **Markdown report** (`backend/pipelines/output/report_*.md`) with the following core sections:
+
+1. **Swap Collection (V2)**: swap count in the window, price points, first/last price  
+2. **Realized Stats**: realized return, realized volatility, maximum drawdown (derived from the swap price series)
+3. **Whale / CEX Flows**: whale sell count/amount, CEX net inflow
+4. **Arbitrage (V2 cross-pool spread)**: cross-pool spread + whether it clears gas
+5. **Uniswap V3 Snapshot**: slot0/tick/liquidity/price across multiple fee tiers
+6. **V3 Executable Arbitrage (V3↔V3)**: executable arbitrage screening across V3 pools (two modes: fast/deep)
+7. **Cross-chain Comparison**: cross-chain USD price comparison + net spread under cost assumptions
+
+The assessment requirement “working script + README explaining how to run / what is collected / what you learned” is implemented via `discovery_run.py` and materialized through the generated report.
+
+---
+
+## 3. Key Findings from the Report
+
+### 3.1 Market Behavior (Short Window)
+- Price moves upward within a 1-hour window (first-to-last price increases), while realized volatility is at several-percent magnitude, indicating non-trivial short-term fluctuations. The max drawdown is negative, showing meaningful intra-window pullbacks (“uptrend with a noticeable drawdown along the way”).
+
+### 3.2 Trading / Capital Flows (Risk Side)
+- Positive CEX net inflow can be interpreted as a risk-side signal: assets moving from on-chain back to exchanges (potential sell-prep), and can be used as a feature in a risk model.
+- Whale selling equals 0, which indicates the current whale-detection threshold and the chosen sampling window did not capture large sell events. This does not imply large funds are absent; it depends on thresholds and address coverage.
+
+### 3.3 V2 Cross-Pool Arbitrage
+- The report detects cross-pool spreads, but **`profitable_after_gas=False`**:  
+  meaning small spreads are consumed by **fees + gas**, which is a typical outcome in on-chain arbitrage (“price difference detected ≠ executable profit”).
+
+### 3.4 V3 Fee Tier Structure
+- For the same pair, `liquidity` differs significantly across fee tiers: usually 0.05%/0.3% tiers are deeper, while the 1% tier is often shallower. This implies:
+  - Small trades may be cheaper in lower-fee pools
+  - Large trades depend more heavily on depth (slippage becomes dominant)
+- The report already includes V3 **tick/slot0/liquidity**, which is the foundation for analyzing “concentrated liquidity → slippage / impact cost”.
+
+### 3.5 Uniswap V3↔V3 Arbitrage
+- The V3 executable-arbitrage module may show a gross spread, while the net result (including fees + gas) is negative:  
+  this is naturally explained by **fee-tier differences + gas costs**, meaning “spread exists, but it is not executable profit”.
+
+### 3.6 Cross-Chain Comparison (Ethereum vs BSC)
+- The system outputs `price_usd/liquidity/volume/txns` for both chains and reports gross/net spread.
+- The current sample net spread is negative: under your assumptions (bridge fee, gas, slippage buffer, time risk), cross-chain arbitrage is not worthwhile (a very reasonable conclusion).
+
+---
+
+## 4. How to Apply the Data (Arb / MEV / Risk)
+
+### 4.1 Arbitrage
+- **Discovery layer**: compute spreads from multi-pool / multi-chain price snapshots (implemented: V2 cross-pool, V3↔V3, cross-chain comparison)
+- **Executability layer**: include fees, gas, and (for cross-chain) bridge fee/time risk/slippage buffer to output net spread and best route (cost decomposition assumptions already exist)
+- **Risk control layer**: if CEX net inflow or volatility spikes, reduce trading frequency or raise thresholds to avoid getting dominated by slippage in high-volatility regimes
+
+### 4.2 MEV Detection (Next Enhancement)
+Swaps + pool state are the foundation for MEV detection, but implementing detection algorithms typically requires:
+- Recognizing same-block multi-swap patterns (sandwich/backrun)
+- Transaction ordering and price-impact-reversion patterns
+
+### 4.3 Risk Analysis
+Using the current data, a lightweight risk score can be built from:
+- realized vol and drawdown (market risk)
+- V3 liquidity depth (liquidity risk)
+- CEX net inflow (potential sell pressure)
+- spreads and failed “executable arbitrage” attempts (a proxy for market efficiency, congestion, and cost pressure)
+
+---
+
+## 5. System architecture diagram
+
+
+```mermaid
+flowchart TD
+    A[Data Sources] --> B[Configuration]
+    A --> C[Collectors]
+    
+    subgraph A [Data Sources]
+        A1[Ethereum RPC]
+        A2[BSC RPC]
+        A3[Arbitrum RPC]
+        A4[DexScreener API]
+    end
+    
+    subgraph B [Configuration]
+        B1[markets.json<br/>Market Config]
+        B2[Environment Variables<br/>.env]
+        B3[config.py<br/>RPC Setup]
+    end
+    
+    subgraph C [Collectors]
+        C1[chain_data.py<br/>V2 On-chain Data]
+        C2[v3_data.py<br/>V3 Pool State]
+        C3[cross_chain_data.py<br/>Cross-chain Data]
+        C4[whale_cex.py<br/>Whale Monitoring]
+    end
+    
+    C --> D[Processing]
+    
+    subgraph D [Processing]
+        D1[evaluate_signal.py<br/>Price Series & Stats]
+        D2[v3_analysis.py<br/>V3 Liquidity Analysis]
+        D3[arbitrage_v3_exec.py<br/>Arbitrage Detection]
+    end
+    
+    D --> E[Core Pipeline]
+    
+    subgraph E [Core Pipeline]
+        E1[discovery_run.py<br/>Main Runner]
+        E2[Time Window Management]
+        E3[Concurrency Control]
+        E4[Error Handling]
+    end
+    
+    E --> F[Storage]
+    
+    subgraph F [Storage]
+        F1[MonitorDatabase<br/>SQLite]
+        F2[In-memory Cache]
+        F3[Output Files<br/>JSON/Markdown]
+    end
+    
+    F --> G[Reporting]
+    
+    subgraph G [Reporting]
+        G1[Markdown Report]
+        G2[Structured JSON]
+        G3[Console Output]
+    end
+    
+    H[Utilities] --> C
+    H --> D
+    H --> E
+    
+    subgraph H [Utilities]
+        H1[web3.py<br/>Blockchain Interaction]
+        H2[pandas/numpy<br/>Data Analysis]
+        H3[TA-Lib<br/>Technical Indicators]
+        H4[Concurrency<br/>asyncio]
+    end
+    
+    I[Monitoring & Control] --> E
+    
+    subgraph I [Monitoring & Control]
+        I1[Progress Tracking]
+        I2[Performance Metrics]
+        I3[Logging]
+        I4[Alerting]
+    end
+    
+    %% Key data flows
+    C1 -- Swap Events / Pool State --> D1
+    C2 -- V3 Liquidity / Price --> D2
+    C3 -- Cross-chain Prices --> D3
+    C4 -- Whale Activity --> D1
+    
+    D1 -- Price Series --> E1
+    D2 -- V3 Analysis Output --> E1
+    D3 -- Arbitrage Opportunities --> E1
+    
+    E1 -- Aggregated Results --> F
+    F -- Persisted Outputs --> G
+    
+    %% Configuration flows
+    B1 -- Market List --> E1
+    B2 -- Runtime Params --> C & D & E
+    B3 -- RPC Endpoints --> C & C4
+    
+    %% Control flows
+    I1 -. Progress Feedback .-> E1
+    I3 -. Log Records .-> C & D & E
 ```
-
 ---
 
-## 3. Core Components
+## 6. How to Run
 
-### 3.1 Smart Contract: `RiskMonitor.sol`
-
-- Purpose: store the risk level of each market on-chain.
-- Key struct:
-
-```solidity
-struct MarketRisk {
-    uint8 level;       // 0=normal,1=watch,2=alert,3=danger
-    uint256 lastUpdate;
-    bool exists;
-}
-```
-
-- Key functions:
-  - `registerMarket(bytes32 marketId)`: register a DEX pool / market
-  - `updateRisk(bytes32 marketId, uint8 newLevel)`: keeper/owner updates risk level
-  - `setUserConfig(marketId, thresholdLevel, autoAlert)`: user sets alert thresholds
-  - `checkAndAlert(marketId)` / `triggerAlertForUser(user, marketId)`: emit alert events
-
-Ownership and a dedicated `keeper` address enforce who is allowed to write risk levels.
-
----
-
-### 3.2 Backend Monitor Script: `backend/monitor.py`
-
-Responsibilities:
-
-1. Periodically pull data from Ethereum mainnet:
-   - Uniswap V2 USDC/WETH swap events (trade count & volume)
-   - Pool reserves via `getReserves()` (estimate liquidity baseline)
-   - Whale selling activity (aggregated size and number of whale addresses)
-   - CEX hot-wallet net inflow (short-term capital movement)
-2. Persist raw metrics into `risk_metrics`
-3. Compute a 0–3 risk level using **static + dynamic** scoring
-4. When “stable and cooled down” conditions are met, call the contract’s `updateRisk` to write the level on-chain
-
-Key functions:
-
-```python
-def compute_risk_level_static(metrics: Dict[str, Any]) -> int: ...
-def compute_risk_level_dynamic(
-    db: MonitorDatabase,
-    market_id_hex: str,
-    metrics: Dict[str, Any],
-    history_window: int = 500,
-) -> int: ...
-```
-
-- If the number of historical points is < 30, fall back to the static rules.
-- Otherwise, use a rolling window and percentile-based scoring for dynamic, regime-aware risk.
-
----
-
-### 3.3 Database Layer: `backend/db.py`
-
-SQLite is used for persisting monitoring outputs and raw metrics.
-
-Key tables:
-
-```sql
-CREATE TABLE IF NOT EXISTS risk_levels (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    market_id TEXT NOT NULL,
-    level INTEGER NOT NULL,
-    source TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS risk_metrics (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    market_id TEXT NOT NULL,
-    dex_volume TEXT NOT NULL,
-    dex_trades INTEGER NOT NULL,
-    whale_sell_total TEXT NOT NULL,
-    whale_count_selling INTEGER NOT NULL,
-    cex_net_inflow TEXT NOT NULL,
-    pool_liquidity TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-Key helper methods:
-
-```python
-db.save_metrics(market_id_hex, metrics)
-db.save_risk_level(market_id=market_id_hex, level=level, source="multi_factor_dynamic")
-db.load_recent_metrics(market_id_hex, limit=history_window)
-```
-
-These support:
-
-- Time-series visualisation on the frontend
-- Offline backtesting & analysis
-- Future integration with PnL-based backtest scripts (e.g. max drawdown vs. risk level)
-
----
-
-### 3.4 Market Config & Dynamic Whale Collection
-
-- Static config file: `backend/markets.json`
-- Unified loader: `backend/market_loader.py`
-- Dynamic whale collector: `backend/collect_eth_whales.py`
-
-Workflow:
-
-1. `collect_eth_whales.py`:
-   - Connects to mainnet via RPC and scans `Transfer` logs of a given ERC20 (default: WETH)
-   - Aggregates total transferred volume and tx count per address
-   - Picks top-N addresses and writes them back into `markets.json` as `AUTO_WHALE_*` entries
-2. `market_loader.py`:
-   - Loads all markets from `markets.json`, combining static DEX pools, manually configured whales, and dynamic `AUTO_WHALE_*` items
-   - `monitor.py` calls `load_markets()` to obtain whale and exchange address lists
-
-This removes manual maintenance of whale lists and lets the monitor adapt as market structure evolves.
-
----
-
-### 3.5 Frontend Dashboard: `frontend_simple/index.html`
-
-Tech: **plain HTML + vanilla JS + Chart.js**
-
-- Served by `backend/api_server.py` as a static page
-- Frontend calls:
-  - `/api/status` – global stats & last record
-  - `/api/risk?limit=100` – recent `risk_levels` for the time series
-- UI:
-  - Sidebar navigation + top status bar
-  - Central risk “traffic light” (levels 0–3)
-  - Time-series chart of risk levels (last 100 points)
-  - Three stat cards: DEX Activity / Whales & CEX / Strategy Hint
-- Polling:
-  - `pollRiskSeries()` runs every 60 seconds to fetch new points and append them to the chart (keeping only the latest 100 points)
-
----
-
-## 4. Risk Scoring Logic
-
-### 4.1 Static Multi-factor Scoring
-
-1. **DEX activity**:
-   - Define a baseline volume as a fraction of pool liquidity
-   - Compute `dex_volume / baseline_volume`
-   - Map the ratio into a 0–30 score, with extra points for large trade counts
-
-2. **Whale pressure**:
-   - Use `whale_sell_total / pool_liquidity` as core ratio
-   - Add extra points when more whales are selling
-   - Cap at 35 points
-
-3. **CEX net inflow**:
-   - Higher `cex_net_inflow / pool_liquidity` → higher score
-   - Cap at 30 points
-
-Total score is in `[0, 100]`, mapped to levels by `level_thresholds`:
-
-```text
-score < 20        → Level 0
-20 ≤ score < 40   → Level 1
-40 ≤ score < 70   → Level 2
-score ≥ 70        → Level 3
-```
-
-### 4.2 Dynamic Percentile-based Scoring
-
-When enough history exists (≥ 30 data points):
-
-- Compute historical percentiles for:
-  - DEX volume
-  - DEX trade count
-  - Whale selling total
-  - CEX net inflow
-
-Map each percentile `p` to a factor score:
-
-```text
-p < 60%        → 0
-60% ≤ p < 80%  → 10
-80% ≤ p < 95%  → 20
-p ≥ 95%        → 30
-```
-
-- DEX factor: average of volume percentile and trade-count percentile, then mapped to score
-- Whale & CEX factors: each mapped independently, then added
-- The final score is fed through the same `level_thresholds = [20, 40, 70]` to get levels 0–3
-
-This makes the system more **regime-aware**, preventing normal high-volatility regimes from being constantly flagged as “danger”.
-
----
-
-## 5. Deployment & Usage
-
-### 5.1 Prerequisites
-
-- Python 3.10+
-- Node.js (for Hardhat contract deployment)
-- Ethereum mainnet RPC (e.g. Infura / Alchemy)
-- Sepolia testnet RPC
-- Etherscan API Key (optional but useful)
-
-### 5.2 Install Dependencies
-
+### 6.1 Environment Setup
+- Python 3.10+ (3.11 recommended)
+- Working RPC endpoints (at least Ethereum Mainnet; add BSC for cross-chain comparison)
 ```bash
-git clone <your-repo-url>
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# === Blockchain node configuration ===
+# ===== RPC =====
+RPC_URL_MAINNET=https://<your-ethereum-rpc>
+
+# Optional: required for cross-chain comparison
+RPC_URL_BSC=https://<your-bsc-rpc>
+
+# ===== Execution cost / gas (optional but recommended) =====
+# Fixed gas price (wei). If unset, read from node; if that fails, fall back to a default.
+GAS_PRICE_WEI=30000000000
+
+# V3 arbitrage mode: fast / deep (default: fast)
+V3_ARB_MODE=fast
+
+# FAST mode estimates gas bps based on a token0 trade size assumption (default: 10000)
+V3_ARB_TRADE_SIZE_TOKEN0=10000
+
+# ===== Cross-chain cost terms (optional) =====
+GAS_COST_USD_ETHEREUM=8.3
+GAS_COST_USD_BSC=1.0
+
+```
+### 6.2 Install Dependencies
+```bash
+python -m venv .venv
+source .venv/bin/activate  
 pip install -r requirements.txt
 ```
-
-Set up `backend/.env`:
-
-```env
-MAINNET_RPC=...
-SEPOLIA_RPC=...
-PRIVATE_KEY=...        # keeper wallet private key (ideally on testnet)
-ETHERSCAN_API_KEY=...
-RISK_NETWORK=sepolia
-MARKET_LABEL=UNISWAP_USDC_WETH
-```
-
-### 5.3 Deploy Smart Contract (sketch)
-
-Deploy `RiskMonitor.sol` to Sepolia via Hardhat or Foundry, then record:
-
-- `RISK_MONITOR_ADDRESS`
-- `KEEPER_ADDRESS` (the account whose `PRIVATE_KEY` the Python monitor uses)
-
-Wire these into `config.py`.
-
-### 5.4 Run the Monitor
-
+### 6.3 Generate the Report
 ```bash
-cd backend
-python monitor.py
+export V3_ARB_MODE=deep
+python backend/pipelines/discovery_run.py --hours 24 
+Report location:
+✅ Report successfully generated: ./defi-market-monitor/backend/pipelines/output/
 ```
+## Appendix: How to Quickly Locate and Understand the “Data Discovery Report” (Key Metric Explanations)
 
-The script will:
-
-- Periodically fetch mainnet data
-- Compute risk levels and store them in SQLite
-- Push new levels on-chain via `updateRisk` when conditions are met
-
-### 5.5 Start API & Frontend
-
-```bash
-cd backend
-python api_server.py
-```
-
-Visit `http://localhost:8000/` to view the dashboard.
+This report is a complete “DeFi market monitoring & opportunity evaluation” output, covering:  
+**on-chain trade collection → price series construction → risk metric computation → arbitrage screening → Uniswap V3 state snapshot → V3 deep executability validation → cross-chain price comparison & net-return estimation**.  
+Recommended reading order: from “data pipeline is working” to “opportunity is executable”.
 
 ---
 
-## 6. Backtesting & Evaluation
-
-Using data from `risk_levels` and `risk_metrics`, you can:
-
-1. Export to CSV & analyse with pandas:
-   - Volatility under each risk regime (Level 0–3)
-   - Strategy PnL / max drawdown conditional on risk level
-2. Rebuild market states around each risk timestamp:
-   - Example: “cut position by half when level ≥ 2” vs. “never de-risk”
-3. Compute summary statistics:
-   - Fraction of time spent in each risk level
-   - Average lead time before Level 3 events
-   - Annualised return / volatility / Sharpe by regime
-
-This turns the dashboard into a quant research tool rather than just a visualisation.
+### 1) Report Metadata (Generated / Chain / Window)
+- **Generated**: report generation timestamp, used to verify this is a real output from the current run.  
+- **Chain**: the network used for on-chain data (e.g., `mainnet`).  
+- **Window**: analysis time range (e.g., 24 hours). All metrics are computed within this window.
 
 ---
 
-## 7. Possible Extensions
+### 2) Swap Collection (On-Chain Trade Collection & Price Series Sanity Check)
+- **Swaps collected**: number of Swap trades collected in the window.  
+- **Price points computed**: number of price points parsed from Swap events.  
+  - Usually equal to swaps collected. If price points are much fewer, parsing may be failing or filtering may be too aggressive.
+- **First price / Last price (token0 per token1)**: first and last price points in the window.  
+  - Interprets “how many units of token0 per 1 unit of token1” (token0/token1 definition depends on the monitored pair for the run).
 
-- Add more factors: funding rates, perp basis, on-chain lending rates, etc.
-- Experiment with simple ML models (e.g. gradient boosting) to learn non-linear mappings from factors to risk
-- Extend to multiple markets/pools and show a risk matrix on the dashboard
-- Integrate with market-making / trading bots for fully automated de-risking and parameter tuning
+---
+
+### 3) Realized Stats (Core Return/Risk Metrics from the Price Series)
+These are computed directly from the price series and summarize the market behavior in the window:
+
+- **Realized return**: cumulative return over the window.  
+  - Negative indicates an overall decline; positive indicates an overall rise.
+- **Realized vol**: realized volatility.  
+  - Larger values mean less stable prices and more intense short-term fluctuations.
+- **Max drawdown**: maximum drawdown.  
+  - The largest peak-to-trough drop observed in the window; a measure of worst-case downside risk.
+
+---
+
+### 4) Whale / CEX Flows (Large-Account Behavior & Exchange Flow Signals)
+This adds a “behavior interpretation layer” beyond price:
+
+- **Whale sell pressure**: total size classified as “whale selling” (in ETH or equivalent).  
+- **Selling whales**: number of whale addresses identified as sellers.  
+- **CEX net inflow**: net flow into centralized exchanges.  
+  - Positive can be interpreted as assets moving to exchanges (potential sell pressure or rebalancing); negative can be interpreted as assets leaving exchanges (withdrawal/holding).
+
+---
+
+### 5) Arbitrage (cross-pool spread) (Same-Chain Cross-Pool Price Difference)
+This section finds instantaneous price differences across pools for the same pair on the same chain:
+
+- **Opportunities detected**: number of cross-pool opportunities detected.  
+- Each opportunity includes:
+  - **pair**: trading pair (token address combination).  
+  - **spread**: gross spread percentage (surface-level difference only).  
+  - **low_pool / high_pool**: the low-price and high-price pools (the buy-low / sell-high endpoints).  
+  - **profitable_after_gas**: whether the opportunity remains profitable after gas cost.
+
+> `spread` is only the price difference; `profitable_after_gas` is the cost-adjusted profitability check.
+
+---
+
+### 6) Uniswap V3 Snapshot (V3 Pool State Snapshot)
+This reads key Uniswap V3 state fields to support V3 analysis and fee-tier comparisons:
+
+- **V3 pools scanned**: number of scanned V3 pools.  
+- Each pool includes:
+  - **pool**: pool address  
+  - **fee**: fee tier (e.g., 500=0.05%, 3000=0.3%, 10000=1%)  
+  - **tick**: current tick index (V3 price discretization coordinate)  
+  - **liquidity**: active liquidity at the current tick range  
+  - **price_token1_per_token0**: spot price converted from `sqrtPriceX96` (token1/token0)
+
+> In V3, price and trade feasibility are constrained by tick liquidity distribution; fee tiers can show different price/feasibility behaviors for the same pair.
+
+---
+
+### 7) V3 Executable Arbitrage (V3↔V3 Deep Executability Validation / deep mode)
+This section does not only compare “spot spreads”; it attempts tick-level swap-step simulation to determine if an arbitrage route is executable.
+
+Key fields:
+- **mode: deep**: deep mode scans ticks and runs a heavier simulation.  
+- **spot_buy_price / spot_sell_price**: spot prices used for surface spread estimation.  
+- **executable**: whether the route is executable under simulation constraints.  
+- **reason**: direct reason for non-executability (e.g., sell leg incomplete, zero output, insufficient tick data).  
+- **buy_leg_debug / sell_leg_debug**: debug info for each swap leg:
+  - `crossed_ticks`: number of initialized ticks crossed during simulation  
+  - `incomplete`: whether the leg halted due to tick boundary/data insufficiency/liquidity issues  
+  - `amount_in_consumed / amount_in_left`: consumed input and leftover input  
+- **assumptions**: key simulation assumptions:
+  - `trade_size_token0`: assumed trade size  
+  - `words_each_side / max_ticks`: tick scan width/limit  
+  - `max_tick_cross`: cap on tick crossing count (limits simulation complexity)
+
+> `executable=false` does not mean “no spread”; it indicates that under current tick scan range and constraints, the route cannot complete both legs or cannot produce valid output.
+
+---
+
+### 8) Cross-chain Comparison (Cross-Chain Price Comparison & Net Return Estimation)
+This compares the same pair across chains and provides a full cost breakdown from gross spread to net profitability.
+
+Recommended reading order:
+1. **chains**: participating chains (e.g., `ethereum`, `bsc`).  
+2. **pairs[].chains.{chain}**: market data per chain (from DexScreener), key fields:
+   - `price_usd`: USD price on that chain  
+   - `liquidity_usd`: pool liquidity size  
+   - `volume_h24 / h6 / h1`: volume  
+   - `txns_*`: buy/sell transaction counts  
+   - `labels`: pool version (e.g., v3/v2)
+3. **arbitrage[]**: cross-chain arbitrage computation output, key fields:
+   - **gross_spread_bps**: gross spread in bps (1 bps = 0.01%)  
+   - **net_spread_bps**: net spread after costs (bridge fee, gas, slippage buffer, time risk)  
+   - **assumptions**: cost/risk decomposition:
+     - `trade_size_usd`: assumed trade size  
+     - `bridge.fixed_fee_usd / variable_fee_bps / eta_seconds`: bridge fees and ETA  
+     - `gas_cost_usd_total`: total gas cost (USD)  
+     - `cost_components_bps`: component breakdown (bridge fixed fee, bridge variable fee, gas, slippage buffer, time risk)
+
+> `gross_spread_bps` measures only price difference; `net_spread_bps` reflects the true result after costs. `net_spread_bps < 0` means not profitable under the current assumptions.
+
+---
+
+### 9) Raw JSON (Structured Output for Verification and Further Processing)
+`Raw JSON` aggregates all structured results for this run, suitable for:
+- automated storage/backfill and backtesting
+- secondary visualization (charts/tables)
+- auditing the source of any metric (e.g., realized stats, arbitrage fields, cross-chain cost breakdown)
+
