@@ -2,22 +2,19 @@
 
 import sqlite3
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union  # [修改]
 
 # 统一使用这个数据库文件
 DB_PATH = Path(__file__).resolve().parent / "defi_monitor.db"
 
 
 class MonitorDatabase:
-    def __init__(self, db_path: Path | str = DB_PATH):
+    def __init__(self, db_path: Union[Path, str] = DB_PATH):  # [修改] 兼容 Python 3.9+
         self.db_path = str(db_path)
         # 加上 check_same_thread=False，方便 Flask / 监控脚本复用同一个类
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.create_tables()
 
-    # ------------------------------------------------------------------
-    # 建表：交易明细 / 风险等级 / 多因子原始指标
-    # ------------------------------------------------------------------
     def create_tables(self):
         c = self.conn.cursor()
 
@@ -53,24 +50,55 @@ class MonitorDatabase:
             """
         )
 
-        # 3) 多因子原始指标，用于动态分位数打分 & 回测
+        # 3) 风险指标（原始指标）
         c.execute(
             """
             CREATE TABLE IF NOT EXISTS risk_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 market_id TEXT,
-                dex_volume TEXT,           -- 注意这里用 TEXT 存大整数
+                dex_volume INTEGER,
                 dex_trades INTEGER,
-                whale_sell_total TEXT,
+                whale_sell_total INTEGER,
                 whale_count_selling INTEGER,
-                cex_net_inflow TEXT,
-                pool_liquidity TEXT,
+                cex_net_inflow INTEGER,
+                pool_liquidity INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
         self.conn.commit()
+        self._migrate_schema()  # [新增] 平滑升级 trades 表字段/索引
+
+    # ------------------------------------------------------------------
+    # Schema Migration（不破坏已有数据库文件）
+    # ------------------------------------------------------------------
+    def _migrate_schema(self):
+        """[新增] 对已有数据库做平滑迁移：给 trades 表补充可分析字段。"""
+        try:
+            c = self.conn.cursor()
+
+            # trades 表新增列：pair/network/token 地址（用于分析与导出）
+            c.execute("PRAGMA table_info(trades)")
+            cols = {row[1] for row in c.fetchall()}
+
+            def _add_col(name: str, ddl: str):
+                if name not in cols:
+                    print(f"🛠️ [DB] 迁移：trades 增加列 {name}")
+                    c.execute(ddl)
+
+            _add_col("pair_address", "ALTER TABLE trades ADD COLUMN pair_address TEXT")
+            _add_col("network", "ALTER TABLE trades ADD COLUMN network TEXT")
+            _add_col("token0_address", "ALTER TABLE trades ADD COLUMN token0_address TEXT")
+            _add_col("token1_address", "ALTER TABLE trades ADD COLUMN token1_address TEXT")
+
+            # 常用索引（加速按 pair/时间窗口查询）
+            c.execute("CREATE INDEX IF NOT EXISTS idx_trades_pair_block ON trades(pair_address, block_number)")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_trades_ts ON trades(timestamp)")
+
+            self.conn.commit()
+        except Exception as e:
+            print(f"⚠️ [DB] schema 迁移失败（可忽略，但建议检查）：{e}")
 
     # ------------------------------------------------------------------
     # 交易明细
@@ -92,8 +120,12 @@ class MonitorDatabase:
                     amount_in,
                     amount_out,
                     gas_used,
-                    gas_price
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    gas_price,
+                    pair_address,
+                    network,
+                    token0_address,
+                    token1_address
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -106,6 +138,10 @@ class MonitorDatabase:
                         str(t["amount_out"]),
                         str(t.get("gas_used", 0)),
                         str(t.get("gas_price", 0)),
+                        t.get("pair_address"),
+                        t.get("network"),
+                        t.get("token0_address"),
+                        t.get("token1_address"),
                     )
                     for t in trades
                 ],
@@ -126,7 +162,7 @@ class MonitorDatabase:
         self.conn.commit()
 
     # ------------------------------------------------------------------
-    # 多因子原始指标：保存 & 读取（动态分位打分会用到）
+    # 风险指标（给前端/报告用）
     # ------------------------------------------------------------------
     def save_metrics(self, market_id: str, metrics: Dict[str, Any]):
         """
@@ -162,100 +198,11 @@ class MonitorDatabase:
                 """,
                 (
                     market_id,
-                    str(dex_volume),          # 大整数转字符串
+                    dex_volume,
                     dex_trades,
-                    str(whale_sell_total),
+                    whale_sell_total,
                     whale_count_selling,
-                    str(cex_net_inflow),
-                    str(pool_liquidity),
+                    cex_net_inflow,
+                    pool_liquidity,
                 ),
             )
-
-    def load_recent_metrics(self, market_id: str, limit: int = 500) -> List[Dict[str, Any]]:
-        """
-        返回最近 limit 条历史指标，**全部转成 int**，
-        确保 compute_risk_level_dynamic / percentile_rank 不会出现 str <= int 的问题。
-        """
-        c = self.conn.cursor()
-        c.execute(
-            """
-            SELECT
-                dex_volume,
-                dex_trades,
-                whale_sell_total,
-                whale_count_selling,
-                cex_net_inflow,
-                pool_liquidity
-            FROM risk_metrics
-            WHERE market_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (market_id, int(limit)),
-        )
-        rows = c.fetchall()
-
-        # rows 现在是从“最新 → 最旧”，反转成“最旧 → 最新”方便做时间序列分析
-        rows.reverse()
-
-        history: List[Dict[str, Any]] = []
-        for row in rows:
-            (
-                dex_volume_raw,
-                dex_trades_raw,
-                whale_sell_total_raw,
-                whale_count_selling_raw,
-                cex_net_inflow_raw,
-                pool_liquidity_raw,
-            ) = row
-
-            # 小心一点：任何异常都兜底成 0，避免线上崩溃
-            try:
-                dex_volume = int(dex_volume_raw)
-            except Exception:
-                dex_volume = 0
-
-            try:
-                dex_trades = int(dex_trades_raw)
-            except Exception:
-                dex_trades = 0
-
-            try:
-                whale_sell_total = int(whale_sell_total_raw)
-            except Exception:
-                whale_sell_total = 0
-
-            try:
-                whale_count_selling = int(whale_count_selling_raw)
-            except Exception:
-                whale_count_selling = 0
-
-            try:
-                cex_net_inflow = int(cex_net_inflow_raw)
-            except Exception:
-                cex_net_inflow = 0
-
-            try:
-                pool_liquidity = int(pool_liquidity_raw)
-            except Exception:
-                pool_liquidity = 0
-
-            history.append(
-                {
-                    "dex_volume": dex_volume,
-                    "dex_trades": dex_trades,
-                    "whale_sell_total": whale_sell_total,
-                    "whale_count_selling": whale_count_selling,
-                    "cex_net_inflow": cex_net_inflow,
-                    "pool_liquidity": pool_liquidity,
-                }
-            )
-
-        return history
-
-    # ------------------------------------------------------------------
-    def close(self):
-        try:
-            self.conn.close()
-        except Exception:
-            pass

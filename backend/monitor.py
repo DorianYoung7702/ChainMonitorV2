@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 from web3 import Web3
 
 from config import load_risk_monitor_contract
-from db import MonitorDatabase
-from chain_data import fetch_recent_swaps
-from whale_cex import fetch_whale_metrics, fetch_cex_net_inflow, estimate_pool_liquidity
+from backend.storage.db import MonitorDatabase
+from backend.collectors.chain_data import fetch_recent_swaps
+from backend.collectors.whale_cex import fetch_whale_metrics, fetch_cex_net_inflow, estimate_pool_liquidity
 
 load_dotenv()
 

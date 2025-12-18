@@ -8,7 +8,7 @@ from flask import Flask, jsonify, request, Response
 from dotenv import load_dotenv
 from web3 import Web3
 
-from db import MonitorDatabase
+from backend.storage.db import MonitorDatabase
 from config import load_risk_monitor_contract
 
 # -------------------------------------------------------------------

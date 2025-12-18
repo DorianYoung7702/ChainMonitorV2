@@ -6,9 +6,33 @@
     "description": "Uniswap V2 USDC/WETH pool on Ethereum mainnet"
   },
   {
+    "label": "SUSHISWAP_USDC_WETH",
+    "type": "dex_pool",
+    "pairAddress": "0x397FF1542f962076d0BFE58eA045FfA2d347ACa0",
+    "description": "SushiSwap V2 USDC/WETH pool on Ethereum mainnet"
+  },
+  {
+    "label": "UNI_V3_USDC_WETH_500",
+    "type": "dex_pool_v3",
+    "poolAddress": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
+    "description": "Uniswap V3 USDC/WETH 0.05% pool"
+  },
+  {
+    "label": "UNI_V3_USDC_WETH_3000",
+    "type": "dex_pool_v3",
+    "poolAddress": "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8",
+    "description": "Uniswap V3 USDC/WETH 0.3% pool"
+  },
+  {
+    "label": "UNI_V3_USDC_WETH_10000",
+    "type": "dex_pool_v3",
+    "poolAddress": "0x7BeA39867e4169DBe237d55C8242a8f2fcDcc387",
+    "description": "Uniswap V3 USDC/WETH 1% pool"
+  },
+  {
     "label": "WHALE_1",
     "type": "whale",
-    "address": "0xYourWhaleAddressHere",
+    "address": "0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43",
     "description": "Example whale wallet to be monitored"
   },
   {
@@ -86,5 +110,145 @@
     "network": "mainnet",
     "address": "0x549d835356d92983AbB76E4cae639f7857963425",
     "description": "Auto-collected ETH whale, ~2000.0 ETH in last 500 blocks"
+  },
+  {
+    "label": "AUTO_WHALE_1",
+    "address": "0xbbbbbbbbbb9cc5e90e3b3af64bdaf62c37eeffcb",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 1,
+      "volume_wei": "103130031804406215132389677",
+      "tx_count": 18313,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_2",
+    "address": "0x06cff7088619c7178f5e14f0b119458d08d2f5ef",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 2,
+      "volume_wei": "42562940149526241856898839",
+      "tx_count": 17344,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_3",
+    "address": "0xd226997439ecfbeff8e110c8c78c8a7eefd19f89",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 3,
+      "volume_wei": "38589850988847425499963568",
+      "tx_count": 12767,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_4",
+    "address": "0x36833ba8b46785c0227c442940489e4ea7be3163",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 4,
+      "volume_wei": "8685039251713400425840711",
+      "tx_count": 2419,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_5",
+    "address": "0x910994a82cfad235633f36b5e2dd67e620aa0564",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 5,
+      "volume_wei": "7868990510100318154754319",
+      "tx_count": 2404,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_6",
+    "address": "0x00eb00c6f847740000884d00e03f00c761998feb",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 6,
+      "volume_wei": "4865345517595986935811240",
+      "tx_count": 770,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_7",
+    "address": "0x59cd1c87501baa753d0b5b5ab5d8416a45cd71db",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 7,
+      "volume_wei": "4137646339240577238129031",
+      "tx_count": 680,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_8",
+    "address": "0x0000000005f122fdde066942195c10106d490486",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 8,
+      "volume_wei": "3160108981775558694706656",
+      "tx_count": 632,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_9",
+    "address": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 9,
+      "volume_wei": "1218136767275453651541123",
+      "tx_count": 3050,
+      "timestamp": 1765990044
+    }
+  },
+  {
+    "label": "AUTO_WHALE_10",
+    "address": "0xbb2b8038a1640196fbe3e38816f3e67cba72d940",
+    "type": "whale_eth",
+    "network": "mainnet",
+    "meta": {
+      "source": "collect_eth_whales",
+      "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "rank": 10,
+      "volume_wei": "1216501692776666077151281",
+      "tx_count": 651,
+      "timestamp": 1765990044
+    }
   }
 ]

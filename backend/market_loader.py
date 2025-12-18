@@ -17,6 +17,7 @@ AUTO_CEX_PATH = BASE_DIR / "auto_cex.json"  # 预留，将来可以做动态交�
 
 
 def _safe_load_json(path: Path) -> Any:
+    """安全加载 JSON 文件"""
     if not path.exists():
         return None
     try:
@@ -75,6 +76,42 @@ def load_markets() -> List[Dict[str, Any]]:
             base.append(item)
 
     return base
+
+
+def load_cross_chain_markets(chain1: str, chain2: str) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    加载并比较两个链上的市场数据。
+    例如：Ethereum 和 BSC 上相同交易对的对比数据。
+
+    :param chain1: 第一个链的名称（例如 'mainnet'）
+    :param chain2: 第二个链的名称（例如 'bsc'）
+    :return: 返回一个字典，包含两个链的市场数据
+    """
+    print(f"加载 {chain1} 和 {chain2} 的市场数据进行对比...")
+
+    # 加载两个链的市场数据
+    markets_chain1 = load_markets_for_chain(chain1)
+    markets_chain2 = load_markets_for_chain(chain2)
+
+    return {
+        "chain1": markets_chain1,
+        "chain2": markets_chain2,
+    }
+
+
+def load_markets_for_chain(chain: str) -> List[Dict[str, Any]]:
+    """
+    根据网络名称加载对应链的市场数据
+    例如：'mainnet'、'bsc'，支持通过不同的 `markets_{network}.json` 文件加载
+    """
+    # 读取对应链的 markets.json 文件
+    markets_path = BASE_DIR / f"markets_{chain}.json"
+
+    markets_data = _safe_load_json(markets_path)
+    if not isinstance(markets_data, list):
+        return []
+
+    return markets_data
 
 
 if __name__ == "__main__":

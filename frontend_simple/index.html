@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DeFi Risk Sentinel · 链上风险仪表盘</title>
+  <title>DeFi Risk Sentinel · On-chain Risk Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- 字体：在香港/台湾可以正常用 Google Fonts，如有问题可以直接删掉这一段 -->
+  <!-- Fonts (can be removed if blocked in your region) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -13,13 +13,13 @@
     rel="stylesheet"
   />
 
-  <!-- 图标：修复 unpkgor 拼写错误，改用 jsDelivr（在港澳台很快） -->
+  <!-- Icons via jsDelivr -->
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/bold/style.css"
   />
 
-  <!-- Chart.js：用 jsDelivr，体积更小一点 -->
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
   <style>
@@ -638,7 +638,7 @@
         <ul class="nav-list">
           <li class="nav-item active">
             <i class="ph-bold ph-gauge"></i>
-            <span>仪表盘 Dashboard</span>
+            <span>Dashboard</span>
           </li>
         </ul>
 
@@ -654,7 +654,7 @@
         <ul class="nav-list">
           <li class="nav-item">
             <i class="ph-bold ph-bell-ringing"></i>
-            <span>风险阈值与告警逻辑</span>
+            <span>Risk Thresholds & Alerts</span>
           </li>
         </ul>
       </nav>
@@ -663,7 +663,7 @@
         <div class="sidebar-footer-pill">
           <div class="status-dot" id="status-dot"></div>
           <div class="sidebar-footer-text">
-            后端：Python 监控脚本 · Hardhat 部署合约
+            Backend: Python monitor · Hardhat-deployed contract
           </div>
         </div>
       </div>
@@ -674,13 +674,13 @@
         <div class="topbar-left">
           <div class="topbar-title">CHAIN RISK DASHBOARD</div>
           <div class="topbar-subtitle">
-            基于以太坊主网真实数据 · Uniswap 池子 + 巨鲸行为 + CEX 资金流
+            Based on Ethereum mainnet data · Uniswap pool + whale behaviour + CEX flows
           </div>
         </div>
         <div class="topbar-right">
           <div class="status-pill">
             <i class="ph-bold ph-activity"></i>
-            <span id="api-status">API 状态：连接中…</span>
+            <span id="api-status">API Status: Connecting…</span>
           </div>
         </div>
       </header>
@@ -690,10 +690,10 @@
           <div class="panel-header">
             <div>
               <div class="panel-title">MARKET RISK OVERVIEW</div>
-              <div class="panel-subtitle">当前监控市场：UNISWAP_USDC_WETH</div>
+              <div class="panel-subtitle">Current market: UNISWAP_USDC_WETH</div>
             </div>
             <div class="panel-header-right">
-              <span>风险等级：0 正常 · 3 高危</span>
+              <span>Risk Level: 0 Normal · 3 Critical</span>
             </div>
           </div>
 
@@ -710,23 +710,23 @@
 
             <div class="risk-meta">
               <div class="risk-head-row">
-                <span>当前风险等级：</span>
-                <span id="risk-level-desc">正常 · 背景波动</span>
+                <span>Current risk level:</span>
+                <span id="risk-level-desc">Normal · background volatility</span>
                 <span class="risk-pill-main" id="risk-pill">
-                  阈值示例：≥ 2 触发策略降仓
+                  Example policy: trigger de-risking when level ≥ 2
                 </span>
               </div>
               <div class="risk-meta-row">
-                <span><i class="ph-bold ph-swap"></i> 池子：USDC / WETH (V2)</span>
+                <span><i class="ph-bold ph-swap"></i> Pool: USDC / WETH (V2)</span>
                 <span><i class="ph-bold ph-cube"></i> MarketId:
                   <code id="market-id-short">—</code>
                 </span>
               </div>
               <div class="risk-meta-row">
-                <span><i class="ph-bold ph-clock"></i> 最近更新：
+                <span><i class="ph-bold ph-clock"></i> Last update:
                   <span id="last-update">—</span>
                 </span>
-                <span><i class="ph-bold ph-database"></i> 记录条数：
+                <span><i class="ph-bold ph-database"></i> Records:
                   <span id="record-count">—</span>
                 </span>
               </div>
@@ -738,9 +738,9 @@
               <div>
                 <span>
                   <i class="ph-bold ph-wave-square"></i>
-                  风险等级时间序列
+                  Risk level time series
                 </span>
-                <span>最近 100 次监控点</span>
+                <span>Last 100 monitoring points</span>
               </div>
               <div class="badge-soft" id="source-badge">source: multi_factor</div>
             </div>
@@ -753,38 +753,38 @@
             <div class="stat-card">
               <div class="stat-label">
                 <i class="ph-bold ph-arrows-left-right"></i>
-                DEX 活跃度
+                DEX Activity
               </div>
               <div class="stat-value" id="dex-volume">—</div>
               <div class="stat-chips">
-                <div class="stat-chip highlight" id="dex-trades">— 笔 Swap</div>
-                <div class="stat-chip">成交量为池子流动性的相对比例仅在后端计算</div>
+                <div class="stat-chip highlight" id="dex-trades">— swaps</div>
+                <div class="stat-chip">Volume vs. pool liquidity is computed on backend</div>
               </div>
             </div>
 
             <div class="stat-card">
               <div class="stat-label">
                 <i class="ph-bold ph-whatsapp-logo"></i>
-                巨鲸 & CEX 行为
+                Whales & CEX Behaviour
               </div>
               <div class="stat-value" id="whale-summary">—</div>
               <div class="stat-chips">
-                <div class="stat-chip warn" id="whale-sell">巨鲸卖出：—</div>
-                <div class="stat-chip" id="cex-flow">CEX 净流入：—</div>
+                <div class="stat-chip warn" id="whale-sell">Whale selling: —</div>
+                <div class="stat-chip" id="cex-flow">CEX net inflow: —</div>
               </div>
             </div>
 
             <div class="stat-card">
               <div class="stat-label">
                 <i class="ph-bold ph-activity"></i>
-                策略提示
+                Strategy Hint
               </div>
               <div class="stat-value" id="hint-text">
-                风险偏低，可以以观察为主，正常仓位参与。
+                Overall risk is low; focus on monitoring, normal position size is acceptable.
               </div>
               <div class="stat-chips">
-                <div class="stat-chip" id="hint-chip-1">状态：观察阶段</div>
-                <div class="stat-chip" id="hint-chip-2">建议：维持常规风险暴露</div>
+                <div class="stat-chip" id="hint-chip-1">Status: Observation</div>
+                <div class="stat-chip" id="hint-chip-2">Suggestion: Normal exposure / low leverage</div>
               </div>
             </div>
           </div>
@@ -794,7 +794,7 @@
           <div class="panel-header">
             <div>
               <div class="panel-title">SIGNAL COMPOSITION</div>
-              <div class="panel-subtitle">多因子风险信号拆解与合约交互方式</div>
+              <div class="panel-subtitle">Multi-factor risk signal & contract interaction</div>
             </div>
           </div>
 
@@ -802,27 +802,27 @@
             <div class="factor-group">
               <div class="factor-row">
                 <div class="factor-col">
-                  <div class="factor-label">链上数据输入</div>
+                  <div class="factor-label">On-chain data inputs</div>
                   <div class="factor-tag">
                     <i class="ph-bold ph-swap"></i>
-                    Uniswap V2 · Swap 事件
+                    Uniswap V2 · Swap events
                   </div>
                   <div class="factor-tag">
                     <i class="ph-bold ph-database"></i>
-                    getReserves() · 池子流动性
+                    getReserves() · pool liquidity
                   </div>
                   <div class="factor-tag">
                     <i class="ph-bold ph-link-simple"></i>
-                    Etherscan API · 巨鲸 / 交易所地址
+                    Etherscan API · whales / exchange addresses
                   </div>
                 </div>
                 <div class="factor-col" style="text-align: right;">
-                  <div class="factor-label">合约侧接口</div>
+                  <div class="factor-label">Contract-side interface</div>
                   <div class="factor-tag">
                     RiskMonitor.updateRisk(marketId, level)
                   </div>
                   <div class="factor-tag">
-                    keeper = Python 监控脚本
+                    keeper = Python monitoring script
                   </div>
                 </div>
               </div>
@@ -831,27 +831,27 @@
             <div class="factor-group">
               <div class="factor-row">
                 <div class="factor-col">
-                  <div class="factor-label">风险因子构成</div>
-                  <div class="factor-tag">DEX 成交量与笔数</div>
-                  <div class="factor-tag">巨鲸卖出规模 / 地址数量</div>
-                  <div class="factor-tag">CEX 热钱包净流入主链 ETH</div>
+                  <div class="factor-label">Risk factor components</div>
+                  <div class="factor-tag">DEX volume & trade count</div>
+                  <div class="factor-tag">Whale sell size / number of addresses</div>
+                  <div class="factor-tag">CEX hot-wallet net inflow (ETH)</div>
                 </div>
                 <div class="factor-col" style="text-align: right;">
-                  <div class="factor-label">风险等级区间</div>
-                  <div class="factor-tag">L0 正常 · L1 注意</div>
-                  <div class="factor-tag">L2 警告 · L3 高危</div>
+                  <div class="factor-label">Risk level ranges</div>
+                  <div class="factor-tag">L0 Normal · L1 Watch</div>
+                  <div class="factor-tag">L2 Alert · L3 Danger</div>
                 </div>
               </div>
             </div>
 
             <div class="factor-group">
               <div class="factor-label" style="margin-bottom: 4px;">
-                用户 & 策略的应用场景
+                Use cases for users & strategies
               </div>
               <ul class="factor-desc">
-                <li>风控：当等级 ≥ 2 时，自动降低杠杆或移除部分流动性。</li>
-                <li>做市：根据风险灯颜色动态调整报价宽度与库存目标。</li>
-                <li>研究：叠加情绪 / 宏观等外部因子，构建更丰富的多维风险面板。</li>
+                <li>Risk control: when level ≥ 2, automatically reduce leverage or remove liquidity.</li>
+                <li>Market making: adjust quote width and inventory targets by risk lamp colour.</li>
+                <li>Research: combine with sentiment / macro factors to build richer risk panels.</li>
               </ul>
             </div>
           </div>
@@ -902,31 +902,31 @@
         case 0:
           color = "var(--risk-0)";
           label = "NORMAL";
-          desc = "正常 · 背景波动";
+          desc = "Normal · background volatility";
           emoji = "🟢";
           break;
         case 1:
           color = "var(--risk-1)";
           label = "WATCH";
-          desc = "注意 · 成交活跃";
+          desc = "Watch · elevated activity";
           emoji = "🟡";
           break;
         case 2:
           color = "var(--risk-2)";
           label = "ALERT";
-          desc = "警告 · 流动性与资金流有放大波动风险";
+          desc = "Alert · liquidity and flows may amplify volatility";
           emoji = "🟠";
           break;
         case 3:
           color = "var(--risk-3)";
           label = "DANGER";
-          desc = "高危 · 建议强制降仓或退出市场";
+          desc = "Danger · consider aggressive de-risking or exit";
           emoji = "🔴";
           break;
         default:
           color = "var(--risk-0)";
           label = "UNKNOWN";
-          desc = "未知";
+          desc = "Unknown";
           emoji = "⚪️";
       }
 
@@ -948,24 +948,24 @@
     function updateHint(level) {
       if (level <= 0) {
         hintTextEl.textContent =
-          "风险总体偏低，可以以监控成交与流动性为主，保持常规仓位。";
-        hintChip1El.textContent = "状态：观察阶段";
-        hintChip2El.textContent = "建议：正常仓位 / 低杠杆";
+          "Overall risk is low; monitor activity and liquidity, normal position size is acceptable.";
+        hintChip1El.textContent = "Status: Observation";
+        hintChip2El.textContent = "Suggestion: Normal exposure / low leverage";
       } else if (level === 1) {
         hintTextEl.textContent =
-          "成交活跃度上升，建议提高对巨鲸动向与交易所资金流的关注。";
-        hintChip1El.textContent = "状态：轻度关注";
-        hintChip2El.textContent = "建议：控制风险敞口";
+          "Trading activity is picking up; pay more attention to whales and CEX flows.";
+        hintChip1El.textContent = "Status: Mild attention";
+        hintChip2El.textContent = "Suggestion: Control risk exposure";
       } else if (level === 2) {
         hintTextEl.textContent =
-          "多因子信号偏紧，存在放大波动或踩踏风险，可逐步降低仓位。";
-        hintChip1El.textContent = "状态：风险偏高";
-        hintChip2El.textContent = "建议：减仓 / 降杠杆";
+          "Multi-factor signals are tight; risk of amplified moves or cascades, consider reducing exposure.";
+        hintChip1El.textContent = "Status: Elevated risk";
+        hintChip2El.textContent = "Suggestion: Reduce size / leverage";
       } else if (level >= 3) {
         hintTextEl.textContent =
-          "综合指标处于高危区域，可能出现极端行情或短时严重失衡。";
-        hintChip1El.textContent = "状态：高危";
-        hintChip2El.textContent = "建议：优先保护本金";
+          "Composite indicators are in danger zone; extreme moves or severe dislocations may occur.";
+        hintChip1El.textContent = "Status: Critical";
+        hintChip2El.textContent = "Suggestion: Prioritise capital preservation";
       }
     }
 
@@ -1026,7 +1026,7 @@
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label: (ctx) => `风险等级: ${ctx.parsed.y}`,
+                label: (ctx) => `Risk level: ${ctx.parsed.y}`,
               },
             },
           },
@@ -1036,12 +1036,12 @@
 
     function setApiStatus(ok, message) {
       if (ok) {
-        apiStatusEl.textContent = message || "API 状态：正常";
+        apiStatusEl.textContent = message || "API Status: OK";
         apiStatusEl.style.color = "#bbf7d0";
         statusDotEl.style.background = "#22c55e";
         statusDotEl.style.boxShadow = "0 0 8px rgba(34, 197, 94, 0.8)";
       } else {
-        apiStatusEl.textContent = message || "API 状态：异常（使用示例数据）";
+        apiStatusEl.textContent = message || "API Status: Error (showing mock data)";
         apiStatusEl.style.color = "#fde68a";
         statusDotEl.style.background = "#eab308";
         statusDotEl.style.boxShadow = "0 0 8px rgba(234, 179, 8, 0.8)";
@@ -1049,7 +1049,7 @@
     }
 
     function useMockData() {
-      setApiStatus(false, "API 状态：请求失败，当前展示示例数据");
+      setApiStatus(false, "API Status: request failed, showing mock data");
 
       const mockLabels = ["T-4", "T-3", "T-2", "T-1", "T"];
       const mockLevels = [0, 0, 1, 1, 2];
@@ -1064,15 +1064,15 @@
       updateHint(2);
 
       marketIdShortEl.textContent = "mock_market";
-      lastUpdateEl.textContent = "示例时间戳";
+      lastUpdateEl.textContent = "mock timestamp";
       recordCountEl.textContent = "mock";
       sourceBadgeEl.textContent = "source: mock_data";
 
-      dexVolumeEl.textContent = "≈ 8.6e19（示例成交量）";
-      dexTradesEl.textContent = "≈ 300 笔 Swap（示例）";
-      whaleSummaryEl.textContent = "示例：近期未观察到明显巨鲸集中抛售。";
-      whaleSellEl.textContent = "巨鲸卖出：0（mock）";
-      cexFlowEl.textContent = "CEX 净流入：约 30 ETH（mock）";
+      dexVolumeEl.textContent = "≈ 8.6e19 (mock volume)";
+      dexTradesEl.textContent = "≈ 300 swaps (mock)";
+      whaleSummaryEl.textContent = "Mock: no obvious concentrated whale selling recently.";
+      whaleSellEl.textContent = "Whale selling: 0 (mock)";
+      cexFlowEl.textContent = "CEX net inflow: ~30 ETH (mock)";
     }
 
     async function loadStatus() {
@@ -1082,7 +1082,7 @@
         const data = await resp.json();
 
         if (data.ok) {
-          const msg = `API 状态：正常 · 已记录 ${data.records || 0} 条风险监控`;
+          const msg = `API Status: OK · ${data.records || 0} risk records`;
           setApiStatus(true, msg);
 
           recordCountEl.textContent = data.records ?? "0";
@@ -1092,10 +1092,10 @@
             lastUpdateEl.textContent = formatTime(data.last.created_at);
           }
         } else {
-          setApiStatus(false, `API 状态：异常 · ${data.message}（使用示例数据）`);
+          setApiStatus(false, `API Status: error · ${data.message} (using mock data)`);
         }
       } catch (e) {
-        setApiStatus(false, "API 状态：请求失败（使用示例数据）");
+        setApiStatus(false, "API Status: request failed (using mock data)");
       }
     }
 
@@ -1130,12 +1130,12 @@
         sourceBadgeEl.textContent = `source: ${last.source || "multi_factor"}`;
 
         dexVolumeEl.textContent =
-          "最近区间成交量与笔数已采集（详细可在后端日志与 SQLite 中查看）";
-        dexTradesEl.textContent = `最近采样点数：${items.length} 次`;
+          "Recent volume and trade count collected (see backend logs & SQLite for details).";
+        dexTradesEl.textContent = `Recent sampling points: ${items.length}`;
         whaleSummaryEl.textContent =
-          "巨鲸卖出与 CEX 净流入已并入多因子风险评分。";
-        whaleSellEl.textContent = "巨鲸卖出：详见后端监控日志";
-        cexFlowEl.textContent = "CEX 净流入：详见后端监控日志";
+          "Whale selling and CEX net inflow are incorporated into the multi-factor score.";
+        whaleSellEl.textContent = "Whale selling: see backend monitor logs";
+        cexFlowEl.textContent = "CEX net inflow: see backend monitor logs";
       } catch (e) {
         useMockData();
       }
@@ -1186,7 +1186,7 @@
         lastUpdateEl.textContent = formatTime(last.created_at);
         sourceBadgeEl.textContent = `source: ${last.source || "multi_factor"}`;
       } catch (e) {
-        // 静默失败，下一轮再试
+        // silent fail; next poll will try again
       }
     }
 
