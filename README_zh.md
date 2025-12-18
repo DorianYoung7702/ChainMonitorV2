@@ -85,104 +85,139 @@
 ## 5. 系统架构图
 
 ```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui",
+    "primaryColor": "#E8F1FF",
+    "primaryTextColor": "#0B1220",
+    "primaryBorderColor": "#3B82F6",
+    "lineColor": "#64748B",
+    "tertiaryColor": "#F8FAFC"
+  }
+}}%%
+
 flowchart TD
-    A[数据源层<br>Data Sources] --> B[配置管理<br>Configuration]
-    A --> C[数据收集层<br>Collectors]
-    
+    A[数据源层<br/>Data Sources] --> B[配置管理<br/>Configuration]
+    A --> C[数据收集层<br/>Collectors]
+
     subgraph A [数据源层]
         A1[以太坊 RPC]
         A2[BSC RPC]
         A3[Arbitrum RPC]
         A4[DexScreener API]
     end
-    
+
     subgraph B [配置管理]
-        B1[markets.json<br>市场配置]
-        B2[环境变量<br>.env]
-        B3[config.py<br>RPC配置]
+        B1[markets.json<br/>市场配置]
+        B2[环境变量<br/>.env]
+        B3[config.py<br/>RPC配置]
     end
-    
+
     subgraph C [数据收集层]
-        C1[chain_data.py<br>V2链上数据]
-        C2[v3_data.py<br>V3池子状态]
-        C3[cross_chain_data.py<br>跨链数据]
-        C4[whale_cex.py<br>鲸鱼监控]
+        C1[chain_data.py<br/>V2链上数据]
+        C2[v3_data.py<br/>V3池子状态]
+        C3[cross_chain_data.py<br/>跨链数据]
+        C4[whale_cex.py<br/>鲸鱼监控]
     end
-    
-    C --> D[数据处理层<br>Processing]
-    
+
+    C --> D[数据处理层<br/>Processing]
+
     subgraph D [数据处理层]
-        D1[evaluate_signal.py<br>价格序列分析]
-        D2[v3_analysis.py<br>V3流动性分析]
-        D3[arbitrage_v3_exec.py<br>套利检测]
+        D1[evaluate_signal.py<br/>价格序列分析]
+        D2[v3_analysis.py<br/>V3流动性分析]
+        D3[arbitrage_v3_exec.py<br/>套利检测]
     end
-    
-    D --> E[核心管道<br>Pipeline]
-    
+
+    D --> E[核心管道<br/>Pipeline]
+
     subgraph E [核心管道]
-        E1[discovery_run.py<br>主运行脚本]
+        E1[discovery_run.py<br/>主运行脚本]
         E2[时间窗口管理]
         E3[并发控制]
         E4[错误处理]
     end
-    
-    E --> F[存储层<br>Storage]
-    
+
+    E --> F[存储层<br/>Storage]
+
     subgraph F [存储层]
-        F1[MonitorDatabase<br>SQLite]
-        F2[临时数据存储<br>Memory]
-        F3[输出文件<br>JSON/Markdown]
+        F1[MonitorDatabase<br/>SQLite]
+        F2[临时数据存储<br/>Memory]
+        F3[输出文件<br/>JSON/Markdown]
     end
-    
-    F --> G[报告生成<br>Reporting]
-    
+
+    F --> G[报告生成<br/>Reporting]
+
     subgraph G [报告生成]
         G1[Markdown报告]
         G2[结构化JSON]
         G3[控制台输出]
     end
-    
-    H[外部工具<br>Utilities] --> C
+
+    H[外部工具<br/>Utilities] --> C
     H --> D
     H --> E
-    
+
     subgraph H [外部工具]
-        H1[web3.py<br>区块链交互]
-        H2[pandas/numpy<br>数据分析]
-        H3[TA-Lib<br>技术指标]
-        H4[并发库<br>asyncio]
+        H1[web3.py<br/>区块链交互]
+        H2[pandas/numpy<br/>数据分析]
+        H3[TA-Lib<br/>技术指标]
+        H4[并发库<br/>asyncio]
     end
-    
-    I[监控与控制<br>Monitoring] --> E
-    
+
+    I[监控与控制<br/>Monitoring] --> E
+
     subgraph I [监控与控制]
         I1[进度监控]
         I2[性能指标]
         I3[日志系统]
         I4[告警机制]
     end
-    
+
     %% 关键数据流向
     C1 -- Swap事件/池子状态 --> D1
     C2 -- V3流动性/价格 --> D2
     C3 -- 跨链价格 --> D3
     C4 -- 鲸鱼活动 --> D1
-    
+
     D1 -- 价格序列 --> E1
     D2 -- V3分析结果 --> E1
     D3 -- 套利机会 --> E1
-    
+
     E1 -- 聚合数据 --> F
     F -- 持久化数据 --> G
-    
+
     %% 配置流向
     B1 -- 市场列表 --> E1
     B2 -- 运行参数 --> C & D & E
     B3 -- RPC端点 --> C & C4
-    
+
     %% 控制流
     I1 -. 进度反馈 .-> E1
     I3 -. 日志记录 .-> C & D & E
+
+    %% ---------- Styling ----------
+    classDef sources fill:#E0F2FE,stroke:#0284C7,color:#0B1220,stroke-width:1px;
+    classDef config  fill:#FEE2E2,stroke:#EF4444,color:#0B1220,stroke-width:1px;
+    classDef collect fill:#ECFDF5,stroke:#10B981,color:#0B1220,stroke-width:1px;
+    classDef proc    fill:#FEF9C3,stroke:#EAB308,color:#0B1220,stroke-width:1px;
+    classDef pipe    fill:#EDE9FE,stroke:#8B5CF6,color:#0B1220,stroke-width:1px;
+    classDef store   fill:#FFEDD5,stroke:#F97316,color:#0B1220,stroke-width:1px;
+    classDef report  fill:#FDF2F8,stroke:#EC4899,color:#0B1220,stroke-width:1px;
+    classDef util    fill:#F1F5F9,stroke:#64748B,color:#0B1220,stroke-width:1px;
+    classDef monitor fill:#DCFCE7,stroke:#22C55E,color:#0B1220,stroke-width:1px;
+
+    class A,A1,A2,A3,A4 sources;
+    class B,B1,B2,B3 config;
+    class C,C1,C2,C3,C4 collect;
+    class D,D1,D2,D3 proc;
+    class E,E1,E2,E3,E4 pipe;
+    class F,F1,F2,F3 store;
+    class G,G1,G2,G3 report;
+    class H,H1,H2,H3,H4 util;
+    class I,I1,I2,I3,I4 monitor;
+
+    linkStyle default stroke:#64748B,stroke-width:1.2px;
 ```
 ---
 
