@@ -8,8 +8,8 @@
 - **Uniswap/Sushi V2：Swap 事件（交易流）**  
   用于构建短窗口价格序列、计算已实现波动率/回撤，并用于跨池价差与可执行套利评估。
 - **Uniswap V3：Pool 状态（slot0/liquidity）+ 局部 tick 分布（tickBitmap window）**  
-  用于理解**集中流动性**导致的价格敏感性（滑点/深度）以及不同 fee tier 的结构差异（500/3000/10000）。这属于题目鼓励的“advanced mechanics（例如 Uniswap v3 集中流动性）”方向。 
-- **跨链对比（Ethereum vs BSC）**：同一“经济意义上的交易对”（如 USDC-ETH/WETH）在不同链上的 **USD price、liquidity、volume、txns**，再估算跨链净价差。属于题目 bonus 的“Cross-chain comparisons”。
+  用于理解**集中流动性**导致的价格敏感性（滑点/深度）以及不同 fee tier 的结构差异（500/3000/10000）。（例如 Uniswap v3 集中流动性） 
+- **跨链对比（Ethereum vs BSC）**：同一“经济意义上的交易对”（如 USDC-ETH/WETH）在不同链上的 **USD price、liquidity、volume、txns**，再估算跨链净价差。
 - **风险侧信号**：CEX 净流入、巨鲸卖出压力（用于辅助解释短周期价格/风险）
 
 为什么有价值：  
@@ -29,7 +29,7 @@
 6. **V3 Executable Arbitrage（V3↔V3）**：对 V3 pool 进行可执行套利筛选（两种模式：fast/deep）
 7. **Cross-chain Comparison**：跨链 USD 价格对比 + 成本假设下的净价差
 
-题目要求的“working script + README 说明如何运行/采集什么/学到了什么”在本项目中由 `discovery_run.py` 驱动并通过报告落地。
+在本项目中由 `discovery_run.py` 驱动并通过报告落地。
 
 ---
 
@@ -50,10 +50,10 @@
 - 同一交易对在不同 fee tier 的 `liquidity` 差异巨大：通常 0.05%/0.3% 档会更深，1% 档更浅；这意味着：
   - 小单可能在低费池更划算
   - 大单更依赖深度（滑点更关键）
-- 你已经把 V3 的 **tick/slot0/liquidity** 拉到报告里，这是分析“集中流动性导致滑点/冲击成本”的基础。
+- 把 V3 的 **tick/slot0/liquidity** 拉到报告里，这是分析“集中流动性导致滑点/冲击成本”的基础。
 
 ### 3.5 Uniswap V3↔V3 套利
-- 你的 V3 可执行套利模块给出 gross spread，但 net spread（含手续费+gas）为负：  
+- V3 可执行套利模块给出 gross spread，但 net spread（含手续费+gas）为负：  
   这很好解释为 **fee tier 差异 + gas 成本** 使得“看起来有价差，但不可执行盈利”。
 
 ### 3.6 跨链对比（Ethereum vs BSC）
@@ -257,7 +257,7 @@ pip install -r requirements.txt
 ### 6.3 生成报告
 ```bash
 export V3_ARB_MODE=deep
-python backend/pipelines/discovery_run.py --hours 24 
+python backend/pipelines/discovery_run.py --chain mainnet --hours 1
 报告位置：
 ✅ Report successfully generated: ./defi-market-monitor/backend/pipelines/output/
 ```

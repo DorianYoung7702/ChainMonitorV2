@@ -10,10 +10,10 @@ This project uses **Ethereum Mainnet (extensible to EVM chains such as BSC)** as
   Used to build short-window price series, compute realized volatility/drawdown, and evaluate cross-pool spreads and executable arbitrage.
 
 - **Uniswap V3: Pool state (slot0/liquidity) + local tick distribution (tickBitmap window)**  
-  Used to understand how **concentrated liquidity** drives price sensitivity (slippage/depth) and structural differences across fee tiers (500/3000/10000). This aligns with the assessment’s encouraged direction of “advanced mechanics (e.g., Uniswap v3 concentrated liquidity)”.
+  Used to understand how **concentrated liquidity** drives price sensitivity (slippage/depth) and structural differences across fee tiers (500/3000/10000).  (e.g., Uniswap v3 concentrated liquidity)
 
 - **Cross-chain comparison (Ethereum vs BSC)**  
-  For the same “economically equivalent trading pair” (e.g., USDC-ETH/WETH), the project compares **USD price, liquidity, volume, and txns** across chains, then estimates the cross-chain net spread. This corresponds to the bonus requirement “Cross-chain comparisons”.
+  For the same “economically equivalent trading pair” (e.g., USDC-ETH/WETH), the project compares **USD price, liquidity, volume, and txns** across chains, then estimates the cross-chain net spread. 
 
 - **Risk-side signals**  
   CEX net inflow and whale sell pressure (used to help interpret short-window price/risk behavior).
@@ -266,7 +266,7 @@ pip install -r requirements.txt
 ### 6.3 Generate the Report
 ```bash
 export V3_ARB_MODE=deep
-python backend/pipelines/discovery_run.py --hours 24 
+python backend/pipelines/discovery_run.py --chain mainnet --hours 1
 Report location:
 ✅ Report successfully generated: ./defi-market-monitor/backend/pipelines/output/
 ```
